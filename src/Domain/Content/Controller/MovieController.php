@@ -6,6 +6,7 @@ use App\Domain\Content\Dto\ContentDtoInterface;
 use App\Domain\Content\Hydrator\MovieHydrator;
 use App\Domain\Content\Service\MovieService;
 use App\Entity\Movie;
+use App\Repository\MovieRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -17,8 +18,9 @@ class MovieController extends AbstractController
 {
     public function __construct(
         readonly private ValidatorInterface $validator,
+        readonly private MovieHydrator $movieHydrator,
         readonly private MovieService $movieService,
-        readonly private MovieHydrator $movieHydrator
+        readonly private MovieRepository $movieRepository,
     )
     {
     }
@@ -56,9 +58,15 @@ class MovieController extends AbstractController
         );
     }
 
-    #[Route('/movies/{movie}', name: 'movies_update', methods: ['PATCH'])]
-    public function update(Movie $movie, Request $request): JsonResponse
+    #[Route('/movies/{id}', name: 'movies_update', methods: ['PATCH'])]
+    public function update(int $id, Request $request): JsonResponse
     {
+        $movie = $this->movieRepository->findOneBy(['id' => $id]);
+
+        if ($movie === null) {
+            return $this->json(['message' => 'Movie not found!'], Response::HTTP_NOT_FOUND);
+        }
+
         return $this->save(
             movieDto: $this->movieHydrator->hydrate(movie: $movie, request: $request),
             message: "Movie updated successfully!"
