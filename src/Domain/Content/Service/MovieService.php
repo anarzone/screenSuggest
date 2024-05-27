@@ -4,7 +4,6 @@ namespace App\Domain\Content\Service;
 
 use App\Domain\Content\Dto\ContentDtoInterface;
 use App\Domain\Content\Dto\Director\DirectorDto;
-use App\Domain\Content\Dto\Movie\MovieDto;
 use App\Domain\Content\Hydrator\MovieHydrator;
 use App\Domain\Content\ValueObject\Content\Duration;
 use App\Domain\Content\ValueObject\Content\Title;
@@ -51,6 +50,14 @@ final readonly class MovieService
         $movieInputDto->id = $movie->getId();
 
         return $this->movieHydrator->hydrate($movie);
+    }
+
+    public function delete(Movie $movie): bool
+    {
+        $this->entityManager->remove($movie);
+        $this->entityManager->flush();
+
+        return true;
     }
 
     private function director(DirectorDto $directorDto): Director

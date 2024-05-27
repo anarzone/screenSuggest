@@ -39,11 +39,18 @@ class MovieController extends AbstractController
         );
     }
 
-    #[Route('/movies/{movie}', name: 'movies_show', methods: ['GET'])]
-    public function show(Movie $movie): JsonResponse
+    #[Route('/movies/{id}', name: 'movies_show', methods: ['GET'])]
+    public function show(int $id): JsonResponse
     {
+        $movie = $this->movieRepository->findOneBy(['id' => $id]);
+
+        if ($movie === null) {
+            return $this->json(['message' => 'Movie not found!', 'data' => []], Response::HTTP_NOT_FOUND);
+        }
+
         return $this->json(
             [
+                'message' => 'Movie found!',
                 'data' => $this->movieService->single($movie)
             ]
         );
@@ -68,9 +75,23 @@ class MovieController extends AbstractController
         }
 
         return $this->save(
-            movieDto: $this->movieHydrator->hydrate(movie: $movie, request: $request),
+            movieDto: $this->movieHydrator->hydrate(movieData: $movie, request: $request),
             message: "Movie updated successfully!"
         );
+    }
+
+    #[Route('/movies/{id}', name: 'movies_delete', methods: ['DELETE'])]
+    public function delete(int $id): JsonResponse
+    {
+        $movie = $this->movieRepository->findOneBy(['id' => $id]);
+
+        if ($movie === null) {
+            return $this->json(['message' => 'Movie not found!'], Response::HTTP_NOT_FOUND);
+        }
+
+        $this->movieService->delete($movie);
+
+        return $this->json(['message' => 'Movie deleted successfully!']);
     }
 
     private function save(ContentDtoInterface $movieDto, string $message): JsonResponse

@@ -4,7 +4,6 @@ namespace App\Domain\Content\Hydrator;
 
 use App\Domain\Content\Dto\ContentDtoInterface;
 use App\Domain\Content\Dto\Movie\MovieDto;
-use App\Entity\Director;
 use App\Entity\Movie;
 use Symfony\Component\HttpFoundation\Request;
 
@@ -14,20 +13,24 @@ final readonly class MovieHydrator
     {
     }
 
-    public function hydrate(?Movie $movie = null, ?Request $request = null): ContentDtoInterface
+    public function hydrate(object|array|null $movieData = null, ?Request $request = null): ContentDtoInterface
     {
-        if($movie !== null && $request !== null) {
+        if($movieData instanceof Movie && $request !== null) {
             $requestData = json_decode($request->getContent());
-            return $this->populateFromMovieAndObject($movie, $requestData);
+            return $this->populateFromMovieAndObject($movieData, $requestData);
         }
 
-        if($movie === null && $request !== null) {
+        if($movieData === null && $request !== null) {
             $requestData = json_decode($request->getContent());
             return $this->populateFromObject($requestData);
         }
 
-        if ($movie !== null && $request === null){
-            return $this->populateFromObject($movie);
+        if (is_array($movieData)){
+            return $this->populateFromObject($movieData);
+        }
+
+        if ($movieData !== null && $request === null){
+            return $this->populateFromObject($movieData);
         }
     }
 
@@ -57,7 +60,7 @@ final readonly class MovieHydrator
         return $dto;
     }
 
-    private function populateFromObject(object $movieData): ContentDtoInterface
+    private function populateFromObject(object|array $movieData): ContentDtoInterface
     {
         $dto = new MovieDto();
 
@@ -78,8 +81,12 @@ final readonly class MovieHydrator
         return $dto;
     }
 
-    private function requestValue($movieData, $key)
+    private function requestValue(object|array $movieData, $key)
     {
+        if (is_array($movieData)){
+            return $movieData[$key] ?? null;
+        }
+
         if ($movieData instanceof Movie){
             return $movieData->{"get".$this->filterString($key)}();
         }
