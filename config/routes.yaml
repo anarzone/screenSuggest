@@ -1,4 +1,4 @@
 Content:
     resource: '../src/Domain/Content/Controller/'
     type:     attribute
-
+    prefix:   /api
