@@ -9,7 +9,9 @@ use Symfony\Component\HttpFoundation\Request;
 
 final readonly class MovieHydrator
 {
-    public function __construct(private DirectorHydrator $directorHydrator)
+    public function __construct(
+        private DirectorHydrator $directorHydrator
+    )
     {
     }
 
@@ -22,15 +24,15 @@ final readonly class MovieHydrator
 
         if($movieData === null && $request !== null) {
             $requestData = json_decode($request->getContent());
-            return $this->populateFromObject($requestData);
+            return $this->populateFromObjectOrArray($requestData);
         }
 
         if (is_array($movieData)){
-            return $this->populateFromObject($movieData);
+            return $this->populateFromObjectOrArray($movieData);
         }
 
         if ($movieData !== null && $request === null){
-            return $this->populateFromObject($movieData);
+            return $this->populateFromObjectOrArray($movieData);
         }
     }
 
@@ -47,38 +49,38 @@ final readonly class MovieHydrator
 
     private function populateFromMovieAndObject(Movie $movie, object $requestData): ContentDtoInterface
     {
-        $dto = new MovieDto();
+        $movieDto = new MovieDto();
 
-        $dto->id = $movie->getId();
-        $dto->title = $this->requestValue($requestData, 'title') ?? $movie->getTitle();
-        $dto->description = $this->requestValue($requestData, 'description') ?? $movie->getDescription();
-        $dto->release_date = new \DateTime($this->requestValue($requestData, 'release_date')) ?? $movie->getReleaseDate();
-        $dto->duration = $this->requestValue($requestData, 'duration') ?? $movie->getDuration()->value();
-        $dto->director = $this->directorHydrator->hydrate($this->requestValue($requestData, 'director') ?? $movie->getDirector());
-        $dto->external_id = $this->requestValue($requestData, 'external_id') ?? $movie->getExternalId();
+        $movieDto->id = $movie->getId();
+        $movieDto->title = $this->requestValue($requestData, 'title') ?? $movie->getTitle();
+        $movieDto->description = $this->requestValue($requestData, 'description') ?? $movie->getDescription();
+        $movieDto->release_date = new \DateTime($this->requestValue($requestData, 'release_date')) ?? $movie->getReleaseDate();
+        $movieDto->duration = $this->requestValue($requestData, 'duration') ?? $movie->getDuration()->value();
+        $movieDto->director = $this->directorHydrator->hydrate($this->requestValue($requestData, 'director') ?? $movie->getDirector());
+        $movieDto->external_id = $this->requestValue($requestData, 'external_id') ?? $movie->getExternalId();
 
-        return $dto;
+        return $movieDto;
     }
 
-    private function populateFromObject(object|array $movieData): ContentDtoInterface
+    private function populateFromObjectOrArray(object|array $movieData): ContentDtoInterface
     {
-        $dto = new MovieDto();
+        $movieDto = new MovieDto();
 
-        $dto->id = $this->requestValue($movieData, 'id');
-        $dto->title = $this->requestValue($movieData, 'title');
-        $dto->description = $this->requestValue($movieData, 'description');
+        $movieDto->id = $this->requestValue($movieData, 'id');
+        $movieDto->title = $this->requestValue($movieData, 'title');
+        $movieDto->description = $this->requestValue($movieData, 'description');
 
         if($release_date = $this->requestValue($movieData, 'release_date')) {
-            $dto->release_date = is_string($release_date) ? new \DateTime($release_date) : $release_date;
+            $movieDto->release_date = is_string($release_date) ? new \DateTime($release_date) : $release_date;
         }
 
         $duration = $this->requestValue($movieData, 'duration');
 
-        $dto->duration = is_int($duration) ? $this->requestValue($movieData, 'duration') : $duration->value();
-        $dto->director = $this->directorHydrator->hydrate($this->requestValue($movieData, 'director'));
-        $dto->external_id = $this->requestValue($movieData, 'external_id');
+        $movieDto->duration = is_int($duration) ? $this->requestValue($movieData, 'duration') : $duration->value();
+        $movieDto->director = $this->directorHydrator->hydrate($this->requestValue($movieData, 'director'));
+        $movieDto->external_id = $this->requestValue($movieData, 'external_id');
 
-        return $dto;
+        return $movieDto;
     }
 
     private function requestValue(object|array $movieData, $key)

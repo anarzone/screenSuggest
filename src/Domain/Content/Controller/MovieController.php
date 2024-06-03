@@ -5,7 +5,6 @@ namespace App\Domain\Content\Controller;
 use App\Domain\Content\Dto\ContentDtoInterface;
 use App\Domain\Content\Hydrator\MovieHydrator;
 use App\Domain\Content\Service\MovieService;
-use App\Entity\Movie;
 use App\Repository\MovieRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -34,6 +33,7 @@ class MovieController extends AbstractController
     {
         return $this->json(
             [
+                'message' => 'All movies',
                 'data' => $this->movieService->all(),
             ]
         );
@@ -71,7 +71,7 @@ class MovieController extends AbstractController
         $movie = $this->movieRepository->findOneBy(['id' => $id]);
 
         if ($movie === null) {
-            return $this->json(['message' => 'Movie not found!'], Response::HTTP_NOT_FOUND);
+            return $this->json(['message' => 'Movie not found!', 'data' => []], Response::HTTP_NOT_FOUND);
         }
 
         return $this->save(
@@ -86,12 +86,12 @@ class MovieController extends AbstractController
         $movie = $this->movieRepository->findOneBy(['id' => $id]);
 
         if ($movie === null) {
-            return $this->json(['message' => 'Movie not found!'], Response::HTTP_NOT_FOUND);
+            return $this->json(['message' => 'Movie not found!', 'data' => []], Response::HTTP_NOT_FOUND);
         }
 
         $this->movieService->delete($movie);
 
-        return $this->json(['message' => 'Movie deleted successfully!']);
+        return $this->json(['message' => 'Movie deleted successfully!', 'data' => []]);
     }
 
     private function save(ContentDtoInterface $movieDto, string $message): JsonResponse
