@@ -8,7 +8,6 @@ beforeEach(function () {
     $this->loadFixtures();
 });
 
-
 describe('MovieController::index method', function () {
     it('should return all movies with status code of 200', function () {
         $this->client->request('GET', '/api/movies');

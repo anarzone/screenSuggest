@@ -28,10 +28,8 @@ class MovieApiTestCase extends WebTestCase
 
     protected function setUp(): void
     {
-//        self::bootKernel();
         $this->client = self::createClient();
         $this->container = self::getContainer();
-
 
         $this->entityManager = $this->container->get(EntityManagerInterface::class);
         $this->movieRepository = $this->container->get(MovieRepository::class);
