@@ -15,7 +15,7 @@ describe('MovieController::index method', function () {
         expect($this->client->getResponse())
             ->toBeInstanceOf(JsonResponse::class)
             ->and($this->client->getResponse()->getStatusCode())->toBe(200)
-            ->and($this->client->getResponse()->getContent())->toContain('message', 'data');;
+            ->and($this->client->getResponse()->getContent())->toContain('message', 'data');
     });
 });
 
