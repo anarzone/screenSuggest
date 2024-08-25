@@ -17,13 +17,18 @@
 # https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Getting-Started.gitlab-ci.yml
 image: php:8.3
 
+services:
+  - mysql:8.0
+
 stages:          # List of stages for jobs, and their order of execution
   - test
   - deploy
 
 variables:
-  PHP_VERSION: '8.2'
+  PHP_VERSION: '8.3'
 
+before_script:
+  - composer install
 
 unit-test-job:   # This job runs in the test stage.
   stage: test    # It only starts when the job in the build stage completes successfully.
