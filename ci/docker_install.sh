@@ -12,11 +12,8 @@ apt-get update \
 && apt-get install curl -y \
 && apt-get install git -y\
 && apt-get install zip -y\
-&& apt-get install wget -y\
 && curl -sS https://get.symfony.com/cli/installer | bash \
-&& mv /root/.symfony/bin/symfony /usr/local/bin/symfony \
 && curl -sS https://getcomposer.org/installer | php
-#install-git.sh
 #!/bin/bash
 
 # We need to install dependencies only for Docker
