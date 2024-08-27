@@ -42,8 +42,8 @@ unit-test-job: # This job runs in the test stage.
   script:
     - php composer.phar install
     - cp .env.test .env
-    - bin/console doctrine:schema:create --env=test
-    - bin/console doctrine:fixtures:load --env=test --group=content --no-interaction
+    - php bin/console doctrine:schema:create --env=test
+    - php bin/console doctrine:fixtures:load --env=test --group=content --no-interaction
     - ./vendor/bin/pest
 
 
