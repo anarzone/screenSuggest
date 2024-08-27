@@ -15,33 +15,31 @@
 # https://docs.gitlab.com/ee/development/cicd/templates.html
 # This specific template is located at:
 # https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Getting-Started.gitlab-ci.yml
-image: php:8.3-cli
+default:
+  image: php:8.3-apache
+  services:
+    - mysql:8.0
 
-services:
-  - mysql:8.0
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - vendor/
 
-stages:          # List of stages for jobs, and their order of execution
+stages: # List of stages for jobs, and their order of execution
   - test
   - deploy
 
 variables:
-  PHP_VERSION: '8.3'
-
-cache:
-    paths:
-        - vendor/
+  MYSQL_ROOT_PASSWORD: root
+  MYSQL_DATABASE: screen_suggest
+  MYSQL_USER: root
+  DATABASE_URL: mysql://root@127:0:0:1:3306/screen_suggest
 
 before_script:
   - bash ci/docker_install.sh > /dev/null
-  # Install composer dependencies
-  - wget https://composer.github.io/installer.sig -O - -q | tr -d '\n' > installer.sig
-  - php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-  - php -r "if (hash_file('SHA384', 'composer-setup.php') === file_get_contents('installer.sig')) { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); } echo PHP_EOL;"
-  - php composer-setup.php
-  - php -r "unlink('composer-setup.php'); unlink('installer.sig');"
   - php composer.phar install
 
-unit-test-job:   # This job runs in the test stage.
+unit-test-job: # This job runs in the test stage.
   stage: test    # It only starts when the job in the build stage completes successfully.
   script:
     - cp .env.test .env
