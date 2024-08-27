@@ -31,6 +31,7 @@ stages: # List of stages for jobs, and their order of execution
 
 variables:
   MYSQL_ROOT_PASSWORD: root
+  MYSQL_ALLOW_EMPTY_PASSWORD: 1
   MYSQL_DATABASE: screen_suggest
   MYSQL_USER: root
   DATABASE_URL: mysql://root@127:0:0:1:3306/screen_suggest
