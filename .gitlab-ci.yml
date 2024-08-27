@@ -32,6 +32,7 @@ cache:
         - vendor/
 
 before_script:
+  - bash ci/docker_install.sh > /dev/null
   # Install composer dependencies
   - wget https://composer.github.io/installer.sig -O - -q | tr -d '\n' > installer.sig
   - php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
