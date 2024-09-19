@@ -12,6 +12,7 @@ apt-get update \
 && apt-get install curl -y \
 && apt-get install git -y\
 && apt-get install libzip-dev zip -y\
+&& apt-get install php8.3-zip -y\
 && curl -sS https://get.symfony.com/cli/installer | bash \
 && curl -sS https://getcomposer.org/installer | php
 #!/bin/bash
