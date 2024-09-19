@@ -8,7 +8,7 @@ set -xe
 apt-get update \
 && apt-get install -y \
 && apt-get autoremove -y \
-&& docker-php-ext-install mysqli pdo pdo_mysql \
+&& docker-php-ext-install mysqli pdo pdo_mysql zip\
 && apt-get install curl -y \
 && apt-get install git -y\
 && apt-get install zip -y\
