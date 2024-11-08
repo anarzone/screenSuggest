@@ -13,4 +13,4 @@ version:
   variables:
     GITLAB_TOKEN: $PAT_SEMANTIC_RELEASE
   only:
-    - master
+    - main
