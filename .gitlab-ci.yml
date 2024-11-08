@@ -1,5 +1,5 @@
 default:
-  image: node
+  image: node:22
 
 stages:
   - version
