@@ -9,10 +9,10 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
 #[AsCommand(
-    name: 'app:convert-tsv',
-    description: 'Convert TSV file to array'
+    name: 'app:import-dataset',
+    description: 'Import movie dataset from Kaggle'
 )]
-class ConvertTSVCommand extends Command
+class ImportContentDataset extends Command
 {
     public function __construct(private readonly TSVConverterService $tsvConverterService)
     {
@@ -21,16 +21,16 @@ class ConvertTSVCommand extends Command
 
     protected function configure()
     {
-        $this->setDescription('Convert TSV file to array');
+        $this->setDescription('Importing movie dataset from Kaggle');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $output->writeln('Convert TSV file to array');
+        $output->writeln('Start importing movie dataset');
 
-        $dir = dirname(__DIR__, 3) . '/Domain/Content/data/imdb-dataset/';
-        $contents = fopen($dir . 'title.ratings.tsv', 'r');
-
+        $dir = dirname(__DIR__, 3) . '/Domain/Content/dataset/';
+        $contents = fopen($dir . 'TMDB_all_movies.csv', 'r');
+        dd($contents);
         $data = [];
         while (false !== ($line = fgets($contents))) {
             // Process $line, e.g split it into values since it is CSV.
