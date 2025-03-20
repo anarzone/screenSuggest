@@ -34,7 +34,7 @@ class Director
     /**
      * @var Collection<int, Movie>
      */
-    #[ORM\OneToMany(targetEntity: Movie::class, mappedBy: 'director')]
+    #[ORM\ManyToMany(targetEntity: Movie::class, mappedBy: 'director')]
     private Collection $movies;
 
     public function __construct()
@@ -95,7 +95,7 @@ class Director
     {
         if (!$this->movies->contains($movie)) {
             $this->movies->add($movie);
-            $movie->setDirector($this);
+            $movie->addDirector($this);
         }
 
         return $this;
@@ -105,8 +105,8 @@ class Director
     {
         if ($this->movies->removeElement($movie)) {
             // set the owning side to null (unless already changed)
-            if ($movie->getDirector() === $this) {
-                $movie->setDirector(null);
+            if ($movie->getDirectors() === $this) {
+                $movie->addDirector($this);
             }
         }
 

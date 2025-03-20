@@ -9,6 +9,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: ActorRepository::class)]
+#[ORM\Table(name: 'actors')]
 class Actor
 {
     #[ORM\Id]
@@ -16,7 +17,7 @@ class Actor
     #[ORM\Column]
     private ?int $id = null;
 
-    #[ORM\Column]
+    #[ORM\Column(nullable: true)]
     private ?bool $adult = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
@@ -31,7 +32,7 @@ class Actor
     #[ORM\Column(type: Types::DATE_MUTABLE, nullable: true)]
     private ?\DateTimeInterface $deathday = null;
 
-    #[ORM\Column(length: 255)]
+    #[ORM\Column(length: 255, nullable: true)]
     private ?string $gender = null;
 
     #[ORM\Column(length: 255, nullable: true)]

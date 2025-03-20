@@ -19,3 +19,7 @@
 ###< phpunit/phpunit ###
 
 /src/Domain/Content/data
+/node_modules
+
+# Ignore dataset
+/src/Domain/Content/dataset/*

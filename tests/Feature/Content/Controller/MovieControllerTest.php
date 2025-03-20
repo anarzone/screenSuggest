@@ -79,7 +79,7 @@ describe('MovieController::update method', function () {
         expect($movieDto)
             ->and($movieDto->title)->toBe('The Matrix')
             ->and($movieDto->duration)->toBe(136)
-            ->and($movieDto->director->name)->toBe('Lana Wachowski');
+            ->and($movieDto->directors->name)->toBe('Lana Wachowski');
 
         $this->client->request('PATCH', '/api/movies/' . $movieDto->id, [], [], [], json_encode([
             'title' => 'The Matrix Reloaded',

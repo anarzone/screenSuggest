@@ -15,4 +15,12 @@ class DirectorDto
     public string $name;
     public ?\DateTimeInterface $birthdate = null;
     public ?string $nationality = null;
+
+    /**
+     * @var array<int> IDs of associated movies
+     */
+    #[Assert\All([
+        new Assert\Type("integer"),
+    ])]
+    public array $movies = [];
 }

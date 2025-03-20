@@ -56,7 +56,7 @@ describe('MovieService::single method', function () {
 
         $director->setName('Lana Wachowski');
         $director->setBirthdate(new DateTime('1965-06-21'));
-        $movie->setDirector($director);
+        $movie->setDirectors($director);
 
         $movie = $this->movieService->single($movie);
 
@@ -64,8 +64,8 @@ describe('MovieService::single method', function () {
             ->toBeInstanceOf(ContentDtoInterface::class)
             ->and($movie->title)->toBe('The Matrix')
             ->and($movie->duration)->toBe(136)
-            ->and($movie->director)->toBeInstanceOf(DirectorDto::class)
-            ->and($movie->director->name)->toBe('Lana Wachowski')
+            ->and($movie->directors)->toBeInstanceOf(DirectorDto::class)
+            ->and($movie->directors->name)->toBe('Lana Wachowski')
         ;
 
     });
@@ -94,7 +94,7 @@ describe('MovieService::store method', function (){
             ->and($movie->description)->toBe('A computer hacker learns from mysterious rebels about the true nature of his reality and his role in the war against its controllers.')
             ->and($movie->release_date)->toBeInstanceOf(DateTimeInterface::class)
             ->and($movie->duration)->toBe(136)
-            ->and($movie->director)->toBeInstanceOf(DirectorDto::class);
+            ->and($movie->directors)->toBeInstanceOf(DirectorDto::class);
     });
 });
 

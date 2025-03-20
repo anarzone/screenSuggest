@@ -2,7 +2,8 @@
 
 namespace App\Domain\Content\Command;
 
-use App\Domain\Content\Service\TSVConverterService;
+use App\Domain\Content\Service\CSVConverterService;
+use League\Csv\Reader;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -12,9 +13,11 @@ use Symfony\Component\Console\Output\OutputInterface;
     name: 'app:import-dataset',
     description: 'Import movie dataset from Kaggle'
 )]
-class ImportContentDataset extends Command
+class ImportDataset extends Command
 {
-    public function __construct(private readonly TSVConverterService $tsvConverterService)
+    public function __construct(
+        private readonly CSVConverterService $tsvConverterService
+    )
     {
         parent::__construct();
     }
@@ -24,23 +27,16 @@ class ImportContentDataset extends Command
         $this->setDescription('Importing movie dataset from Kaggle');
     }
 
+    /**
+     * @throws \Exception
+     */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $output->writeln('Start importing movie dataset');
 
-        $dir = dirname(__DIR__, 3) . '/Domain/Content/dataset/';
-        $contents = fopen($dir . 'TMDB_all_movies.csv', 'r');
-        dd($contents);
-        $data = [];
-        while (false !== ($line = fgets($contents))) {
-            // Process $line, e.g split it into values since it is CSV.
-            $values = explode("\t", trim($line, "\n"));
-            $data[] = $values;
-            print_r($data);
-        }
+        $this->tsvConverterService->bulkImportMoviesWithRelations();
 
-        fclose($contents);
-
+        $output->writeln("<info>Imported movies successfully.</info>");
 
         return Command::SUCCESS;
     }

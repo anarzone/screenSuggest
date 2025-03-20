@@ -31,8 +31,8 @@ class Movie
     #[ORM\Column(type: 'duration', nullable: true)]
     private ?Duration $duration = null;
 
-    #[ORM\ManyToOne(inversedBy: 'movies')]
-    private ?Director $director = null;
+    #[ORM\ManyToMany(targetEntity: Director::class, inversedBy: 'movies')]
+    private ?Collection $directors;
 
     /**
      * @var Collection<int, Review>
@@ -41,7 +41,7 @@ class Movie
     private Collection $reviews;
 
     #[ORM\Column(nullable: true)]
-    private ?int $external_id = null;
+    private ?string $tmdbId = null;
 
     /**
      * @var Collection<int, Actor>
@@ -53,13 +53,39 @@ class Movie
      * @var Collection<int, Genre>
      */
     #[ORM\ManyToMany(targetEntity: Genre::class, inversedBy: 'movies')]
+
     private Collection $genres;
+
+    #[ORM\Column(nullable: true)]
+    private ?string $imdbId = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $imdbRating = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $imdbVotes = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $originalTitle = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $productionCountries = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $productionCompanies = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $spokenLanguages = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $posterPath = null;
 
     public function __construct()
     {
         $this->reviews = new ArrayCollection();
         $this->actors = new ArrayCollection();
         $this->genres = new ArrayCollection();
+        $this->directors = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -115,14 +141,16 @@ class Movie
         return $this;
     }
 
-    public function getDirector(): ?Director
+    public function getDirectors(): ?Collection
     {
-        return $this->director;
+        return $this->directors;
     }
 
-    public function setDirector(?Director $director): static
+    public function addDirector(Director $director): static
     {
-        $this->director = $director;
+        if (!$this->directors->contains($director)) {
+            $this->directors->add($director);
+        }
 
         return $this;
     }
@@ -157,14 +185,14 @@ class Movie
         return $this;
     }
 
-    public function getExternalId(): ?int
+    public function getTmdbId(): ?string
     {
-        return $this->external_id;
+        return $this->tmdbId;
     }
 
-    public function setExternalId(?int $external_id): static
+    public function setTmdbId(?string $tmdbId): static
     {
-        $this->external_id = $external_id;
+        $this->tmdbId = $tmdbId;
 
         return $this;
     }
@@ -213,6 +241,102 @@ class Movie
     public function removeGenre(Genre $genre): static
     {
         $this->genres->removeElement($genre);
+
+        return $this;
+    }
+
+    public function getImdbId(): ?string
+    {
+        return $this->imdbId;
+    }
+
+    public function setImdbId(?string $imdbId): static
+    {
+        $this->imdbId = $imdbId;
+
+        return $this;
+    }
+
+    public function getImdbRating(): ?string
+    {
+        return $this->imdbRating;
+    }
+
+    public function setImdbRating(?string $imdbRating): static
+    {
+        $this->imdbRating = $imdbRating;
+
+        return $this;
+    }
+
+    public function getImdbVotes(): ?string
+    {
+        return $this->imdbVotes;
+    }
+
+    public function setImdbVotes(?string $imdbVotes): static
+    {
+        $this->imdbVotes = $imdbVotes;
+
+        return $this;
+    }
+
+    public function getOriginalTitle(): ?string
+    {
+        return $this->originalTitle;
+    }
+
+    public function setOriginalTitle(?string $originalTitle): static
+    {
+        $this->originalTitle = $originalTitle;
+
+        return $this;
+    }
+
+    public function getProductionCountries(): ?string
+    {
+        return $this->productionCountries;
+    }
+
+    public function setProductionCountries(?string $productionCountries): static
+    {
+        $this->productionCountries = $productionCountries;
+
+        return $this;
+    }
+
+    public function getProductionCompanies(): ?string
+    {
+        return $this->productionCompanies;
+    }
+
+    public function setProductionCompanies(?string $productionCompanies): static
+    {
+        $this->productionCompanies = $productionCompanies;
+
+        return $this;
+    }
+
+    public function getSpokenLanguages(): ?string
+    {
+        return $this->spokenLanguages;
+    }
+
+    public function setSpokenLanguages(?string $spokenLanguages): static
+    {
+        $this->spokenLanguages = $spokenLanguages;
+
+        return $this;
+    }
+
+    public function getPosterPath(): ?string
+    {
+        return $this->posterPath;
+    }
+
+    public function setPosterPath(?string $posterPath): static
+    {
+        $this->posterPath = $posterPath;
 
         return $this;
     }

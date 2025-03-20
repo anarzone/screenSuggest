@@ -3,7 +3,9 @@
 namespace App\Domain\Content\Controller;
 
 use App\Domain\Content\Dto\ContentDtoInterface;
+use App\Domain\Content\Dto\Movie\MovieDto;
 use App\Domain\Content\Hydrator\MovieHydrator;
+use App\Domain\Content\Service\CSVConverterService;
 use App\Domain\Content\Service\MovieService;
 use App\Repository\MovieRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -20,6 +22,7 @@ class MovieController extends AbstractController
         readonly private MovieHydrator $movieHydrator,
         readonly private MovieService $movieService,
         readonly private MovieRepository $movieRepository,
+        readonly private CSVConverterService $csvConverterService
     )
     {
     }
@@ -94,7 +97,7 @@ class MovieController extends AbstractController
         return $this->json(['message' => 'Movie deleted successfully!', 'data' => []]);
     }
 
-    private function save(ContentDtoInterface $movieDto, string $message): JsonResponse
+    private function save(MovieDto $movieDto, string $message): JsonResponse
     {
         $errors = $this->validator->validate($movieDto);
 
@@ -108,5 +111,11 @@ class MovieController extends AbstractController
             'message' => $message,
             'data' => $movieDto,
         ], Response::HTTP_CREATED);
+    }
+
+    #[Route('/csv', name: 'movies_csv', methods: ['GET'])]
+    public function testUrl(): void
+    {
+        $this->csvConverterService->convert();
     }
 }

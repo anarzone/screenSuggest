@@ -10,23 +10,49 @@ use App\Domain\Content\Validator\Movie as MovieValidator;
 class MovieDto implements ContentDtoInterface
 {
     #[Assert\NotBlank(groups: ['update'])]
-    public ?string $id=null;
+    public ?string $id = null;
 
     #[Assert\NotNull]
     #[Assert\NotBlank]
     #[MovieValidator\UniqueTitle]
     public string $title;
-    public ?string $description;
+    #[Assert\Length(max: 255)]
+    public ?string $originalTitle = null;
+    public ?string $description = null;
+
     #[Assert\NotNull]
-    public \DateTimeInterface $release_date;
+    public ?\DateTimeInterface $releaseDate = null;
 
-    #[Assert\NotBlank]
+    #[Assert\NotNull]
     #[Assert\Range(min: 1, max: 6000)]
-    public int $duration;
-    public ?DirectorDto $director;
+    public ?int $duration = null;
+    public ?array $directors = null;
+    public ?string $imdbRating = null;
+    public ?string $tmdbId = null;
+    public ?string $imdbId = null;
 
-    public ?float $rating;
-    public ?float $imdb_rating;
-    public ?float $rotten_tomatoes_rating;
-    public ?int $external_id;
+    #[Assert\Length(max: 255)]
+    public ?string $imdbVotes = null;
+    public ?string $productionCountries = null;
+    public ?string $productionCompanies = null;
+    public ?string $spokenLanguages = null;
+
+    #[Assert\Length(max: 255)]
+    public ?string $posterPath = null;
+
+    /**
+     * @var array<int, int> IDs of associated genres
+     */
+    #[Assert\All([
+        new Assert\Type("integer"),
+    ])]
+    public array $genres = [];
+
+    /**
+     * @var array<int, int> IDs of associated actors
+     */
+    #[Assert\All([
+        new Assert\Type("integer"),
+    ])]
+    public array $actors = [];
 }
