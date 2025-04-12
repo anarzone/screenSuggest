@@ -4,12 +4,12 @@ namespace App\Domain\Content\Service;
 
 ini_set('memory_limit', '-1');
 
-use App\Domain\Content\Hydrator\MovieHydrator;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception;
 use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-final readonly class  CSVConverterService
+final class  CSVConverterService
 {
     /**
      * Caches to avoid duplicate lookups for relations.
@@ -25,8 +25,6 @@ final readonly class  CSVConverterService
 
     public function __construct(
         private ManagerRegistry $managerRegistry,
-        private MovieService    $movieService,
-        private MovieHydrator   $movieHydrator,
     )
     {
         $this->relationCaches = [];
@@ -54,7 +52,10 @@ final readonly class  CSVConverterService
         $entityManager = $this->managerRegistry->getManager('dataset');
         $connection = $entityManager->getConnection();
 
-        // Step 1: Create or truncate the staging table.
+        // Step 1: Truncate all target tables to start fresh
+        $this->truncateTargetTables($connection);
+
+        // Step 2: Create or truncate the staging table.
 //        $this->createOrTruncateStagingTable($connection);
 //
 //        // Step 2: Bulk load the CSV into the staging table.
@@ -74,67 +75,82 @@ final readonly class  CSVConverterService
         $connection->beginTransaction();
         try {
             $pageSize = 1000;
-            $lastId = 0;
+            $lastImdbId = 0;
 
             while (true) {
-
                 $query = "SELECT * FROM movies_staging WHERE id > ? ORDER BY id LIMIT " . $pageSize;
-                $stagingRecords = $connection->fetchAllAssociative($query, [$lastId]);
+                $stagingRecords = $connection->fetchAllAssociative($query, [$lastImdbId]);
 
                 if (empty($stagingRecords)) {
                     break;
                 }
 
+                $movieBatchData = [];
+                $tmdbIds = []; // Store movie IDs for relation processing
+
                 foreach ($stagingRecords as $record) {
-                    $movieData = [
-                        'tmdbId' => $record['id'],
-                        'title' => $record['title'],
+                    $lastImdbId = $record['id'];
+                    $tmdbIds[] = $record['id'];
+
+                    $movieBatchData[] = [
+                        'title' => $this->truncateString($record['title'], 255),
+                        'original_title' => $this->truncateString($record['original_title'], 255),
                         'description' => $record['overview'],
+                        'release_date' => $this->validateAndReturnDate($record['release_date']),
                         'duration' => $record['runtime'],
-                        'releaseDate' => $this->validateAndReturnDate($record['release_date']),
-                        'imdbId' => $record['imdb_id'],
-                        'originalTitle' => $record['original_title'],
-                        'imdbRating' => $record['imdb_rating'],
-                        'imdbVotes' => $record['imdb_votes'],
-                        'productionCountries' => $record['production_countries'],
-                        'productionCompanies' => $record['production_companies'],
-                        'spokenLanguages' => $record['spoken_languages'],
-                        'directors' => $record['director'],
-                        'genres' => $record['genres'],
-                        'actors' => $record['cast'],
-
-
-                        'poster_path' => $record['poster_path'],
+                        'tmdb_id' => $record['id'],
+                        'imdb_id' => $this->truncateString($record['imdb_id'], 50),
+                        'imdb_rating' => $record['imdb_rating'],
+                        'imdb_votes' => $record['imdb_votes'],
+                        'production_countries' => $record['production_countries'],
+                        'production_companies' => $record['production_companies'],
+                        'spoken_languages' => $record['spoken_languages'],
+                        'poster_path' => $this->truncateString($record['poster_path'], 255),
                     ];
+                }
 
-                    $movieDto = $this->movieHydrator->hydrate(movieData: $movieData);
+                // Batch insert movies
+                $this->batchInsert($connection, 'movies', $movieBatchData);
 
+                echo "Inserted " . count($movieBatchData) . " movies." . PHP_EOL;
 
-                    $connection->insert('movies', $movieData);
-                    $movieId = $connection->lastInsertId();
+                // Get mapping of TMDB IDs to database IDs
+                $placeholders = implode(',', array_fill(0, count($tmdbIds), '?'));
+                $idMappingQuery = "SELECT id, tmdb_id FROM movies WHERE tmdb_id IN ($placeholders)";
+                $mappingResults = $connection->fetchAllAssociative($idMappingQuery, $tmdbIds);
 
-                    // Process many-to-many relationships.
-                    $this->processManyToMany($connection, $movieId, $record['genres'], 'genres', 'movie_genre', 'genre_id');
-                    $this->processManyToMany($connection, $movieId, $record['director'], 'directors', 'movie_director', 'director_id');
-                    $this->processManyToMany($connection, $movieId, $record['writers'], 'writers', 'movie_writer', 'writer_id');
-                    $this->processManyToMany($connection, $movieId, $record['producers'], 'producers', 'movie_producer', 'producer_id');
-                    $this->processManyToMany($connection, $movieId, $record['music_composer'], 'music_composers', 'movie_music_composer', 'music_composer_id');
+                $movieIdMapping = [];
+                foreach ($mappingResults as $result) {
+                    $movieIdMapping[$result['tmdb_id']] = $result['id'];
+                }
+
+                // Process relationships for all entity types
+                $relationTypes = [
+                    ['stagingRecordField' => 'genres', 'table' => 'genres', 'junctionTable' => 'movie_genre', 'junctionColumn' => 'genre_id'],
+                    ['stagingRecordField' => 'cast', 'table' => 'actors', 'junctionTable' => 'movie_actor', 'junctionColumn' => 'actor_id'],
+                    ['stagingRecordField' => 'director', 'table' => 'directors', 'junctionTable' => 'movie_director', 'junctionColumn' => 'director_id']
+                ];
+
+                foreach ($relationTypes as $relationType) {
+                    $this->processRelationsForBatch(
+                        $connection,
+                        $stagingRecords,
+                        $movieIdMapping,
+                        $relationType,
+                    );
                 }
             }
 
+            // Commit the transaction after successful processing
             $connection->commit();
-            echo "Bulk import with relations completed" . PHP_EOL;
+            echo "Bulk import with relations completed successfully" . PHP_EOL;
         } catch (\Exception $e) {
             $connection->rollBack();
+            echo "Error during import: " . $e->getMessage() . PHP_EOL;
             throw $e;
         }
     }
 
-    /**
-     * Create the staging table if it does not exist; if it exists, truncate it.
-     *
-     * @param Connection $connection
-     */
     private function createOrTruncateStagingTable(Connection $connection): void
     {
         $createTableSQL = "
@@ -173,92 +189,176 @@ final readonly class  CSVConverterService
         $connection->executeQuery("TRUNCATE TABLE movies_staging");
     }
 
-    /**
-     * Process a many-to-many relationship field.
-     *
-     * @param Connection $connection
-     * @param int $movieId The ID of the movie.
-     * @param string|null $data Comma-separated list of related names.
-     * @param string $relationTable The table storing the related entities (e.g., 'genres', 'actors').
-     * @param string $junctionTable The join table linking movies and the related table.
-     * @param string $junctionColumn The column in the join table referencing the related entity (e.g., 'genre_id').
-     */
-    private function processManyToMany(Connection $connection, int $movieId, ?string $data, string $relationTable, string $junctionTable, string $junctionColumn): void
+    private function batchInsert(Connection $connection, string $table, array $batchData): void
     {
-        if (empty($data)) {
+        if (empty($batchData)) {
             return;
         }
 
-        $items = explode(',', $data);
-        foreach ($items as $item) {
-            $item = trim($item);
-            if (empty($item)) {
+        $columns = array_keys($batchData[0]);
+        $params = [];
+        $rowsPlaceholders = [];
+
+        foreach ($batchData as $row) {
+            $placeholders = [];
+            foreach ($columns as $col) {
+                $placeholders[] = '?';
+                $params[] = $row[$col];
+            }
+            $rowsPlaceholders[] = '(' . implode(',', $placeholders) . ')';
+        }
+
+        $query = 'INSERT IGNORE INTO ' . $table . ' (' . implode(',', $columns) . ') VALUES ' . implode(',', $rowsPlaceholders);
+        $connection->executeQuery($query, $params);
+    }
+
+    private function processRelationsForBatch(
+        Connection $connection,
+        array $stagingRecords,
+        array $movieIdMapping,
+        array $relationType
+    ): void {
+        $stagingRecordField = $relationType['stagingRecordField'];
+        $entityTable = $relationType['table'];
+        $junctionTable = $relationType['junctionTable'];
+        $junctionColumn = $relationType['junctionColumn'];
+        // Extract and collect all unique relation entities for this batch
+        $allEntities = [];
+        $relationMap = [];
+
+        foreach ($stagingRecords as $record) {
+            $tmdbId = $record['id'];
+            if (!isset($movieIdMapping[$tmdbId]) || empty($record[$stagingRecordField])) {
                 continue;
             }
 
-            $relatedId = $this->getOrCreateEntity($connection, $relationTable, $item);
+            $movieId = $movieIdMapping[$tmdbId];
+            $items = array_map('trim', explode(',', $record[$stagingRecordField]));
 
-            // Check if the relationship already exists.
-            $exists = $connection->fetchOne(
-                "SELECT 1 FROM $junctionTable WHERE movie_id = ? AND $junctionColumn = ?",
-                [$movieId, $relatedId]
-            );
-            if (!$exists) {
-                $connection->insert($junctionTable, [
-                    'movie_id' => $movieId,
-                    $junctionColumn => $relatedId,
-                ]);
+            // Use array_unique to remove any duplicate items in the source data
+            $items = array_unique($items);
+
+            foreach ($items as $item) {
+                if (empty($item)) continue;
+
+                $allEntities[$item] = true;
+                if (!isset($relationMap[$movieId])) {
+                    $relationMap[$movieId] = [];
+                }
+                $relationMap[$movieId][] = $item;
             }
+        }
+
+        // Bulk insert all unique entities
+        $entityBatchData = [];
+        foreach (array_keys($allEntities) as $name) {
+            $entityBatchData[] = ['name' => $name];
+        }
+
+        if (!empty($entityBatchData)) {
+            $this->batchInsert($connection, $entityTable, $entityBatchData);
+        }
+
+        // Get the IDs of the entities we just inserted
+        $placeholders = str_repeat('?,', count($allEntities) - 1) . '?';
+        $entityNames = array_keys($allEntities);
+        $entityQuery = "SELECT id, name FROM $entityTable WHERE name IN ($placeholders)";
+        $entityResults = $connection->fetchAllAssociative($entityQuery, $entityNames);
+
+        $entityIdMapping = [];
+        foreach ($entityResults as $result) {
+            $entityIdMapping[$result['name']] = $result['id'];
+        }
+
+        // Build and execute junction table inserts
+        $junctionBatchData = [];
+        foreach ($relationMap as $movieId => $entityNames) {
+            foreach ($entityNames as $name) {
+                if (isset($entityIdMapping[$name])) {
+                    $junctionBatchData[] = [
+                        'movie_id' => $movieId,
+                        $junctionColumn => $entityIdMapping[$name]
+                    ];
+                }
+            }
+        }
+
+        if (!empty($junctionBatchData)) {
+            $this->batchInsert($connection, $junctionTable, $junctionBatchData);
         }
     }
 
-    /**
-     * Get an entity ID from a relation table by name, or create it if it doesn't exist.
-     *
-     * @param Connection $connection
-     * @param string $table The relation table (e.g., 'genres', 'actors').
-     * @param string $name The name of the related entity.
-     * @return int The ID of the entity.
-     */
-    private function getOrCreateEntity(Connection $connection, string $table, string $name): int
+    private function truncateTargetTables(Connection $connection): void
     {
-        if (!isset($this->relationCaches[$table])) {
-            $this->relationCaches[$table] = [];
-        }
-        if (isset($this->relationCaches[$table][$name])) {
-            return $this->relationCaches[$table][$name];
-        }
+        // Disable foreign key checks to allow truncating tables with relationships
+        $connection->executeQuery('SET FOREIGN_KEY_CHECKS = 0');
 
-        $existing = $connection->fetchAssociative("SELECT id FROM $table WHERE name = ?", [$name]);
-        if ($existing) {
-            $id = $existing['id'];
-        } else {
-            $connection->insert($table, ['name' => $name]);
-            $id = $connection->lastInsertId();
-        }
-        $this->relationCaches[$table][$name] = $id;
-        return $id;
+        // Truncate junction tables first
+        $connection->executeQuery('TRUNCATE TABLE movie_genre');
+        $connection->executeQuery('TRUNCATE TABLE movie_actor');
+        $connection->executeQuery('TRUNCATE TABLE movie_director');
+
+        // Truncate main tables
+        $connection->executeQuery('TRUNCATE TABLE movies');
+        $connection->executeQuery('TRUNCATE TABLE genres');
+        $connection->executeQuery('TRUNCATE TABLE actors');
+        $connection->executeQuery('TRUNCATE TABLE directors');
+
+        // Re-enable foreign key checks
+        $connection->executeQuery('SET FOREIGN_KEY_CHECKS = 1');
     }
 
     /**
      * Validate and format a date string.
-     *
      * Returns the date in 'Y-m-d' format or null if the date is invalid.
-     *
-     * @param string $date
-     * @return string|null
      */
-    private function validateAndReturnDate(string $date): ?string
+    private function validateAndReturnDate(?string $date): ?string
     {
-        $date = trim($date);
-        if (empty($date)) {
+        if ($date === null || trim($date) === '') {
             return null;
         }
+
+        $date = trim($date);
         $exploded = explode('-', $date);
+
+        // Check basic format
         if (count($exploded) !== 3) {
             return null;
         }
+
+        // Check for negative years or years outside MySQL's supported range
+        $year = (int)$exploded[0];
+        if ($year <= 0 || $year > 9999) {
+            return null;
+        }
+
+        // Create DateTime and verify it's valid
         $dateTime = \DateTime::createFromFormat('Y-m-d', $date);
-        return $dateTime ? $dateTime->format('Y-m-d') : null;
+        if (!$dateTime || $dateTime->format('Y-m-d') !== $date) {
+            return null;
+        }
+
+        return $dateTime->format('Y-m-d');
+    }
+
+    private function truncateString(?string $string, int $length): ?string
+    {
+        if ($string === null) {
+            return null;
+        }
+
+        $string = trim($string);
+
+        // For multibyte characters, one character can use up to 4 bytes in UTF-8
+        // So let's be more conservative with the length
+        $truncated = mb_substr($string, 0, (int)($length * 0.75), 'UTF-8');
+
+        // Make sure we're definitely within limits
+        while (strlen($truncated) > $length) {
+            $truncated = mb_substr($truncated, 0, mb_strlen($truncated, 'UTF-8') - 1, 'UTF-8');
+        }
+
+        return $truncated;
     }
 }
+
