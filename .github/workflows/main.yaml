@@ -36,8 +36,8 @@ jobs:
           extensions: mbstring, intl, dom
           coverage: none
 
-      - name: Install Composer Dependencies
-        run: composer install --no-progress --prefer-dist
+      - name: Install Composer Dependencies (no scripts)
+        run: composer install --no-progress --prefer-dist --no-scripts
 
       - name: Run Envoy Deployment
         run: |
