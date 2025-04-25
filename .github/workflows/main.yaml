@@ -16,32 +16,11 @@ jobs:
     if: github.ref == 'refs/heads/dev'
     environment: dev
     env:
-      SSH_PRIVATE_KEY: $GITHUB_DEPLOYMENT_KEY
+      SSH_PRIVATE_KEY: $DEPLOYMENT_KEY
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-#      - name: Setup SSH
-#        uses: webfactory/ssh-agent@v0.7.0
-#        with:
-#          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-#          log-public-key: true
-
-#      - name: Add Server to known_hosts
-#        run: |
-#          mkdir -p ~/.ssh
-#          ssh-keyscan 116.202.22.113 >> ~/.ssh/known_hosts
-
-#      - name: Setup Php
-#        uses: shivammathur/setup-php@v2
-#        with:
-#          php-version: '8.3'
-#          extensions: mbstring, intl, dom
-#          coverage: none
-
-#      - name: Install Composer Dependencies (no scripts)
-#        run: composer install --no-progress --prefer-dist --no-scripts
 
       - name: Setup SSH agent and add key
         run: |
