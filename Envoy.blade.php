@@ -1,29 +1,37 @@
 @if($environment === '')
+    // $environment is injected by the Envoy CLI via the --environment flag.
+    // If you omit the flag, it defaults to 'dev'.
     $environment = 'dev';
 @endif
 
 @setup
+    $siteName = getenv('SITE_NAME') ?: 'screenSuggest';
+
     switch($environment) {
+        case 'dev':
+            // Development environment settings
+            $servers   = ['web' => 'forge@116.202.22.113'];
+            $branch    = 'dev';
+            $appEnv    = 'dev';
+            $hostnameRoot = 'dev.anarzone.com';
+            break;
         case 'prod':
             // Production environment settings
-            $servers = ['web' => 'forge@116.202.22.113'];
-            $branch = 'main';
-            $appEnv = 'prod';
-            $hostname = 'prod.anarzone.com';
+            $servers   = ['web' => 'forge@116.202.22.113'];
+            $branch    = 'main';
+            $appEnv    = 'prod';
+            $hostnameRoot = 'prod.anarzone.com';
             break;
         default:
-            // Default to development environment
-            $servers = ['web' => 'forge@116.202.22.113'];
-            $branch = 'dev';
-            $appEnv = 'dev';
-            $hostname = 'dev.anarzone.com';
+            throw new Exception("Unknown environment: {$environment}");
     }
 
+    $hostname = $hostnameRoot . '/' . $siteName;
     $baseUrl = 'https://' . $hostname;
+    $app_dir = '/home/forge/' . $hostnameRoot . '/' . $siteName;
     
     // Repository and directory settings
     $repository = "https://github.com/anarzone/screenSuggest.git";
-    $app_dir = '/home/forge/' . $hostname;
     $releases_dir = $app_dir . '/releases';
     $release = date('YmdHis');
     $new_release_dir = $releases_dir . '/' . $release;

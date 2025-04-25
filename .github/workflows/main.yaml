@@ -12,13 +12,38 @@ on:
       - main
 
 jobs:
-  deploy:
+  deployDevelopmentJob:
+    if: github.ref == 'refs/heads/dev'
+    environment: dev
+    env:
+      SSH_PRIVATE_KEY: $GITHUB_DEPLOYMENT_KEY
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Setup SSH
+#      - name: Setup SSH
+#        uses: webfactory/ssh-agent@v0.7.0
+#        with:
+#          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+#          log-public-key: true
+
+#      - name: Add Server to known_hosts
+#        run: |
+#          mkdir -p ~/.ssh
+#          ssh-keyscan 116.202.22.113 >> ~/.ssh/known_hosts
+
+#      - name: Setup Php
+#        uses: shivammathur/setup-php@v2
+#        with:
+#          php-version: '8.3'
+#          extensions: mbstring, intl, dom
+#          coverage: none
+
+#      - name: Install Composer Dependencies (no scripts)
+#        run: composer install --no-progress --prefer-dist --no-scripts
+
+      - name: Setup SSH agent and add key
         uses: webfactory/ssh-agent@v0.7.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -29,29 +54,9 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan 116.202.22.113 >> ~/.ssh/known_hosts
 
-      - name: Setup Php
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          extensions: mbstring, intl, dom
-          coverage: none
-
-      - name: Install Composer Dependencies (no scripts)
-        run: composer install --no-progress --prefer-dist --no-scripts
-
       - name: Run Envoy Deployment
         run: |
-          # Extract the branch name from GITHUB_REF
-          BRANCH_NAME=${GITHUB_REF##*/}
-          echo "Deploying branch: ${BRANCH_NAME}"
-          
-          # Decide deployment environment: main -> prod, otherwise dev
-          if [ "${BRANCH_NAME}" = "main" ]; then
-            ENV="prod"
-          else
-            ENV="dev"
-          fi
-          echo "Deploying to the '${ENV}' environment"
-          
           # Run the Envoy deployment command using the determined environment
-          vendor/bin/envoy run deploy --environment=$ENV
+          ~/.composer/vendor/bin/envoy run deploy \
+          --environment=dev \
+          --secret=${{ secrets.DEV_DECRYPTION_KEY }}
