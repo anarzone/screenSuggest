@@ -17,7 +17,7 @@
             break;
         case 'prod':
             // Production environment settings
-            $servers   = ['web' => 'forge@116.202.22.113'];
+lll            $servers   = ['web' => 'forge@116.202.22.113'];
             $branch    = 'main';
             $appEnv    = 'prod';
             $hostnameRoot = 'prod.anarzone.com';
