@@ -51,4 +51,4 @@ jobs:
           echo "Deploying to the dev environment"
 
           # Run the Envoy deployment command using the determined environment
-          vendor/bin/envoy run deploy --environment=$ENV --secret="${{ secrets.DEV_DECRYPTION_KEY }}"
+          vendor/bin/envoy run deploy --environment=dev --secret="${{ secrets.DEV_DECRYPTION_KEY }}"
