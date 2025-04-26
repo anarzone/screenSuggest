@@ -22,24 +22,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Setup SSH agent and add key
-        run: |
-          which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )
-          eval $(ssh-agent -s)
-          echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
-          mkdir -p ~/.ssh
-          if [[ -f /.dockerenv ]]; then
-            echo -e "Host *\n\tStrictHostKeyChecking no\n\n" >> ~/.ssh/config
-          fi          
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          log-public-key: true
 
       - name: Add Server to known_hosts
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan 116.202.22.113 >> ~/.ssh/known_hosts
+          ssh-keyscan 116.202.22.113 >> ~/.ssh/known_hosts    
+
+      - name: Setup Php
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, dom
+          coverage: none
+
+      - name: Install Composer Dependencies (no scripts)
+        run: composer install --no-progress --prefer-dist --no-scripts
 
       - name: Run Envoy Deployment
         run: |
+          # Extract the branch name from GITHUB_REF
+          BRANCH_NAME=${GITHUB_REF##*/}
+          echo "Deploying branch: ${BRANCH_NAME}"
+          echo "Deploying to the dev environment"
+
           # Run the Envoy deployment command using the determined environment
-          php vendor/bin/envoy run deploy \
-          --environment=dev \
-          --secret="${{ secrets.DEV_DECRYPTION_KEY }}"
+          vendor/bin/envoy run deploy --environment=$ENV --secret="${{ secrets.DEV_DECRYPTION_KEY }}"
