@@ -40,6 +40,6 @@ jobs:
       - name: Run Envoy Deployment
         run: |
           # Run the Envoy deployment command using the determined environment
-          ~/.composer/vendor/bin/envoy run deploy \
+          php vendor/bin/envoy run deploy \
           --environment=dev \
-          --secret=${{ secrets.DEV_DECRYPTION_KEY }}
+          --secret="${{ secrets.DEV_DECRYPTION_KEY }}"
