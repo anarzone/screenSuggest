@@ -15,8 +15,6 @@ jobs:
   deployDevelopmentJob:
     if: github.ref == 'refs/heads/dev'
     environment: dev
-    env:
-      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
