@@ -5,7 +5,7 @@
 @endif
 
 @setup
-    $siteName = getenv('SITE_NAME') ?: 'screenSuggest';
+    $siteName = getenv('SITE_NAME') ?: 'screensuggest';
 
     switch($environment) {
         case 'dev':
@@ -25,11 +25,14 @@
         default:
             throw new Exception("Unknown environment: {$environment}");
     }
+    // Convert siteName to lowercase and remove any spaces for subdomain usage
+    $siteSubdomain = strtolower(str_replace(' ', '', $siteName));
 
-    $hostname = $hostnameRoot . '/' . $siteName;
+    // Create hostname using subdomain format instead of path
+    $hostname = $siteSubdomain . '.' . $hostnameRoot;
     $baseUrl = 'https://' . $hostname;
-    $app_dir = '/home/forge/' . $hostnameRoot . '/' . $siteName;
-    
+    $app_dir = '/home/forge/' . $hostname;
+
     // Repository and directory settings
     $repository = "https://github.com/anarzone/screenSuggest.git";
     $releases_dir = $app_dir . '/releases';
