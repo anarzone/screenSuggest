@@ -17,7 +17,7 @@ jobs:
     environment: dev
     runs-on: ubuntu-latest
     env:
-      WEBHOOK_URL: 'https://forge.laravel.com/servers/906819/sites/2701305/deploy/http?token=G1D1ZUGsBwI8gkNWIcYbw1LOTDIcFAzJYKye5QHa'
+      WEBHOOK_URL: 'https://forge.laravel.com/servers/906819/sites/2702774/deploy/http?token=lEIlkPZ0hqHDym2IGlF3D6wyG6YJO63CL1FWEUGj'
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
