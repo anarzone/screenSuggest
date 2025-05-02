@@ -53,4 +53,4 @@ jobs:
           # Run the Envoy deployment command using the determined environment
           vendor/bin/envoy run deploy --environment=dev --secret="${{ secrets.DEV_DECRYPTION_KEY }}" --token="${{ secrets.DEPLOY_TOKEN }} " --branch="${BRANCH_NAME}" --host=
           # echo "Deployment to the dev environment completed successfully."
-          - curl -s -o /dev/null $WEBHOOK_URL
+          curl -s -o /dev/null $WEBHOOK_URL
