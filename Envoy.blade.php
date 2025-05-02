@@ -130,7 +130,7 @@
     echo "Restarting messenger"
     export APP_ENV={{ $appEnv }}
     cd {{ $app_dir }}/current
-    {{ $phpPath }} {{ $app_dir }}/current/bin/console messenger:stop-workers
+    {{ $phpPath }} {{ $app_dir }}/current/ bin/console messenger:stop-workers
 @endtask
 
 @task('deployment_cleanup')
