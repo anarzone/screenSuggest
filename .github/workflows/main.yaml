@@ -16,6 +16,8 @@ jobs:
     if: github.ref == 'refs/heads/dev'
     environment: dev
     runs-on: ubuntu-latest
+    env:
+      WEBHOOK_URL: 'https://forge.laravel.com/servers/906819/sites/2701305/deploy/http?token=G1D1ZUGsBwI8gkNWIcYbw1LOTDIcFAzJYKye5QHa'
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -49,4 +51,6 @@ jobs:
           echo "Deploying to the dev environment"
 
           # Run the Envoy deployment command using the determined environment
-          vendor/bin/envoy run deploy --environment=dev --secret="${{ secrets.DEV_DECRYPTION_KEY }}"
+          vendor/bin/envoy run deploy --environment=dev --secret="${{ secrets.DEV_DECRYPTION_KEY }}" --token="${{ secrets.DEPLOY_TOKEN }} " --branch="${BRANCH_NAME}" --host=
+          # echo "Deployment to the dev environment completed successfully."
+          - curl -s -o /dev/null $WEBHOOK_URL
