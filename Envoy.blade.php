@@ -33,7 +33,13 @@
     $baseUrl = 'https://' . $hostname;
     $app_dir = '/home/forge/' . $hostname;
 
-    // Repository and directory settings
+    # add linked directories here without trailing or leading slashes
+    $symlinks = [
+        'var/log' => 'var/log',
+        'var/sessions' => 'var/sessions',
+    ];
+
+// Repository and directory settings
     $repository = "https://github.com/anarzone/screenSuggest.git";
     $releases_dir = $app_dir . '/releases';
     $release = date('YmdHis');
@@ -44,7 +50,7 @@
     $composerPath = '/usr/local/bin/composer';
     
     // Webhook for deployment badge updates (update with your real webhook URL)
-    $webhook = 'https://forge.laravel.com/servers/906819/sites/2681789/deploy/http?token=y6nrRCAxKkG3ze5wExSieRsdshKJFtxUPE28gsOG';
+    // $webhook = 'https://forge.laravel.com/servers/906819/sites/2681789/deploy/http?token=y6nrRCAxKkG3ze5wExSieRsdshKJFtxUPE28gsOG';
 @endsetup
 
 @servers($servers)
@@ -122,8 +128,30 @@
 
 @task('update_symlinks')
     echo 'Updating symlinks...'
-    echo 'Relinking current to the new release'
-    ln -nfs {{ $new_release_dir }} {{ $app_dir }}/current
+    
+    @foreach ($symlinks as $target => $link)
+        # remove existing directory in newly created release
+        rm -rf {{ $new_release_dir }}/{{ $link }}
+        echo "Creating symlink: {{ $link }} -> {{ $target }}"
+        # create shared directory if it does not exist
+        if [ ! -d {{ $app_dir }}/shared/{{ $target }} ]; then
+            mkdir -p {{ $app_dir }}/shared/{{ $target }}
+        fi
+        ln -nfs {{ $app_dir }}/shared/{{ $target }} {{ $new_release_dir }}/{{ $link }}
+    @endforeach
+
+    echo 'Copying new release files to current directory...'
+    # Remove old files from current directory
+    if [ -d {{ $app_dir }}/current ]; then
+        rm -rf {{ $app_dir }}/current/*
+    else
+        mkdir -p {{ $app_dir }}/current
+    fi
+    
+    # Copy new release files to current directory
+    cp -R {{ $new_release_dir }}/* {{ $app_dir }}/current/
+    
+    echo 'Files updated successfully'
 @endtask
 
 @task('restart_messenger')
