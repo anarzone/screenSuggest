@@ -140,18 +140,8 @@
         ln -nfs {{ $app_dir }}/shared/{{ $target }} {{ $new_release_dir }}/{{ $link }}
     @endforeach
 
-    echo 'Copying new release files to current directory...'
-    # Remove old files from current directory
-{{--    if [ -d {{ $app_dir }}/current ]; then--}}
-{{--        rm -rf {{ $app_dir }}/current/*--}}
-{{--    else--}}
-{{--        mkdir -p {{ $app_dir }}/current--}}
-{{--    fi--}}
-    
-    # Copy new release files to current directory
-{{--    cp -R {{ $new_release_dir }}/* {{ $app_dir }}/current/--}}
+    echo 'Switching to new release...'
     ln -nfs {{ $new_release_dir }} {{ $app_dir }}/current
-    echo 'Files updated successfully'
 @endtask
 
 @task('restart_messenger')
@@ -165,6 +155,11 @@
     cd {{ $releases_dir }}
     find . -maxdepth 1 -name "20*" | sort | head -n -4 | xargs rm -Rf
     echo "Cleaned up old deployments"
+@endtask
+
+@task('dumpenv', ['on' => 'web'])
+    cd {{ $app_dir }}/current
+    {{ $phpPath }} bin/console debug:container --env-vars
 @endtask
 
 @task('deployment_rollback', ['on' => 'web', 'confirm' => true])
