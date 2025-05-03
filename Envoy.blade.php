@@ -142,15 +142,15 @@
 
     echo 'Copying new release files to current directory...'
     # Remove old files from current directory
-    if [ -d {{ $app_dir }}/current ]; then
-        rm -rf {{ $app_dir }}/current/*
-    else
-        mkdir -p {{ $app_dir }}/current
-    fi
+{{--    if [ -d {{ $app_dir }}/current ]; then--}}
+{{--        rm -rf {{ $app_dir }}/current/*--}}
+{{--    else--}}
+{{--        mkdir -p {{ $app_dir }}/current--}}
+{{--    fi--}}
     
     # Copy new release files to current directory
-    cp -R {{ $new_release_dir }}/* {{ $app_dir }}/current/
-    
+{{--    cp -R {{ $new_release_dir }}/* {{ $app_dir }}/current/--}}
+    ln -nfs {{ $new_release_dir }} {{ $app_dir }}/current
     echo 'Files updated successfully'
 @endtask
 
