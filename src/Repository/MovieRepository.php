@@ -21,6 +21,36 @@ class MovieRepository extends ServiceEntityRepository
         parent::__construct($registry, Movie::class);
     }
 
+    /**
+     * Find paginated movies
+     *
+     * @param int $limit Maximum number of movies to return
+     * @param int $offset Starting position
+     * @return array
+     */
+    public function findPaginated(int $limit, int $offset): array
+    {
+        return $this->createQueryBuilder('m')
+            ->orderBy('m.id', 'ASC')
+            ->setMaxResults($limit)
+            ->setFirstResult($offset)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Count total number of movies
+     *
+     * @return int
+     */
+    public function countTotal(): int
+    {
+        return $this->createQueryBuilder('m')
+            ->select('COUNT(m.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
 //    /**
 //     * @return Movie[] Returns an array of Movie objects
 //     */

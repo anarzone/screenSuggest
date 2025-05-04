@@ -2,11 +2,11 @@
 
 namespace App\Domain\Content\Controller;
 
-use App\Domain\Content\Dto\ContentDtoInterface;
 use App\Domain\Content\Dto\Movie\MovieDto;
 use App\Domain\Content\Hydrator\MovieHydrator;
 use App\Domain\Content\Service\CSVConverterService;
 use App\Domain\Content\Service\MovieService;
+use App\Domain\Content\Service\PaginationService;
 use App\Repository\MovieRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -22,7 +22,8 @@ class MovieController extends AbstractController
         readonly private MovieHydrator $movieHydrator,
         readonly private MovieService $movieService,
         readonly private MovieRepository $movieRepository,
-        readonly private CSVConverterService $csvConverterService
+        readonly private CSVConverterService $csvConverterService,
+        readonly private PaginationService $paginationService
     )
     {
     }
@@ -32,12 +33,23 @@ class MovieController extends AbstractController
         name: 'movies_all',
         methods: ['GET']
     )]
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $paginationParams = $this->paginationService->getPaginationParameters($request);
+        $page = $paginationParams['page'];
+        $limit = $paginationParams['limit'];
+        $offset = $paginationParams['offset'];
+
+        $movies = $this->movieService->getPaginated($limit, $offset);
+        $totalItems = $this->movieService->countTotal();
+
+        $paginationData = $this->paginationService->createPaginationData($page, $limit, $totalItems);
+
         return $this->json(
             [
-                'message' => 'All movies',
-                'data' => $this->movieService->all(),
+                'message' => 'Movies retrieved successfully',
+                'data' => $movies,
+                'pagination' => $paginationData
             ]
         );
     }

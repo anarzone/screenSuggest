@@ -35,6 +35,17 @@ final readonly class MovieService
     {
         return $this->movieHydrator->hydrateCollection($this->movieRepository->findAll());
     }
+    
+    public function getPaginated(int $limit, int $offset): array
+    {
+        $movies = $this->movieRepository->findPaginated($limit, $offset);
+        return $this->movieHydrator->hydrateCollection($movies);
+    }
+    
+    public function countTotal(): int
+    {
+        return $this->movieRepository->countTotal();
+    }
 
     public function single(Movie $movie): ContentDtoInterface
     {

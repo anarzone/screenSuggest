@@ -128,6 +128,8 @@ final readonly class MovieHydrator
             return [];
         }
 
+        $values = [];
+
         if ($value instanceof Collection) {
             foreach ($value as $item) {
                 $values[] = $item->getName();
