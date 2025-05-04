@@ -54,3 +54,46 @@ jobs:
           vendor/bin/envoy run deploy --environment=dev --secret="${{ secrets.DEV_DECRYPTION_KEY }}" --token="${{ secrets.DEPLOY_TOKEN }} " --branch="${BRANCH_NAME}"
           # echo "Deployment to the dev environment completed successfully."
           curl -s -o /dev/null $WEBHOOK_URL
+
+  deployProductionJob:
+    if: github.ref == 'refs/heads/main'
+    environment: prod
+    runs-on: ubuntu-latest
+    env:
+      WEBHOOK_URL: 'https://forge.laravel.com/servers/906819/sites/2703985/deploy/http?token=tUCD6z2aGZViwOMpEeRa2CBMabPIBeJmrzPbrpPb'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          log-public-key: true
+
+      - name: Add Server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan 116.202.22.113 >> ~/.ssh/known_hosts    
+
+      - name: Setup Php
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, dom
+          coverage: none
+
+      - name: Install Composer Dependencies (no scripts)
+        run: composer install --no-progress --prefer-dist --no-scripts
+
+      - name: Run Envoy Deployment
+        run: |
+          # Extract the branch name from GITHUB_REF
+          BRANCH_NAME=${GITHUB_REF##*/}
+          echo "Deploying branch: ${BRANCH_NAME}"
+          echo "Deploying to the prod environment"
+
+          # Run the Envoy deployment command using the determined environment
+          vendor/bin/envoy run deploy --environment=prod --secret="${{ secrets.PROD_DECRYPTION_KEY }}" --token="${{ secrets.DEPLOY_TOKEN }} " --branch="${BRANCH_NAME}"
+          # echo "Deployment to the prod environment completed successfully."
+          curl -s -o /dev/null $WEBHOOK_URL
