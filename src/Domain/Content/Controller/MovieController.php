@@ -3,6 +3,7 @@
 namespace App\Domain\Content\Controller;
 
 use App\Domain\Content\Dto\Movie\MovieDto;
+use App\Domain\Content\Dto\Movie\MovieFilter;
 use App\Domain\Content\Hydrator\MovieHydrator;
 use App\Domain\Content\Service\CSVConverterService;
 use App\Domain\Content\Service\MovieService;
@@ -22,7 +23,6 @@ class MovieController extends AbstractController
         readonly private MovieHydrator $movieHydrator,
         readonly private MovieService $movieService,
         readonly private MovieRepository $movieRepository,
-        readonly private CSVConverterService $csvConverterService,
         readonly private PaginationService $paginationService
     )
     {
@@ -35,23 +35,24 @@ class MovieController extends AbstractController
     )]
     public function index(Request $request): JsonResponse
     {
-        $paginationParams = $this->paginationService->getPaginationParameters($request);
-        $page = $paginationParams['page'];
-        $limit = $paginationParams['limit'];
-        $offset = $paginationParams['offset'];
+        $pagination = $this->paginationService->getPaginationParameters($request);
+        $filter     = MovieFilter::fromRequest($request);
 
-        $movies = $this->movieService->getPaginated($limit, $offset);
-        $totalItems = $this->movieService->countTotal();
-
-        $paginationData = $this->paginationService->createPaginationData($page, $limit, $totalItems);
-
-        return $this->json(
-            [
-                'message' => 'Movies retrieved successfully',
-                'data' => $movies,
-                'pagination' => $paginationData
-            ]
+        [$movies, $total] = $this->movieService->getPaginatedFiltered(
+            $filter,
+            $pagination['limit'],
+            $pagination['offset']
         );
+
+        return $this->json([
+            'message'    => 'Movies retrieved successfully',
+            'data'       => $movies,
+            'pagination' => $this->paginationService->createPaginationData(
+                $pagination['page'],
+                $pagination['limit'],
+                $total
+            ),
+        ]);
     }
 
     #[Route('/movies/{id}', name: 'movies_show', methods: ['GET'])]
@@ -123,11 +124,5 @@ class MovieController extends AbstractController
             'message' => $message,
             'data' => $movieDto,
         ], Response::HTTP_CREATED);
-    }
-
-    #[Route('/csv', name: 'movies_csv', methods: ['GET'])]
-    public function testUrl(): void
-    {
-        $this->csvConverterService->convert();
     }
 }

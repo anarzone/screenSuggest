@@ -5,7 +5,6 @@ namespace App\Domain\Content\Service;
 ini_set('memory_limit', '-1');
 
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\Exception;
 use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -56,26 +55,52 @@ final class  CSVConverterService
         $this->truncateTargetTables($connection);
 
         // Step 2: Create or truncate the staging table.
-//        $this->createOrTruncateStagingTable($connection);
-//
-//        // Step 2: Bulk load the CSV into the staging table.
-//        $sql = sprintf(
-//            "LOAD DATA LOCAL INFILE '%s'
-//             INTO TABLE movies_staging
-//             FIELDS TERMINATED BY ',' ENCLOSED BY '\"'
-//             LINES TERMINATED BY '\n'
-//             IGNORE 1 LINES
-//             (id, title, vote_average, vote_count, status, release_date, revenue, runtime, budget, imdb_id, original_language, original_title, overview, popularity, tagline, genres, production_companies, production_countries, spoken_languages, cast, director, director_of_photography, writers, producers, music_composer, imdb_rating, imdb_votes, poster_path)",
-//            addslashes($csvFile)
-//        );
-//        $connection->executeQuery($sql);
+        $this->createOrTruncateStagingTable($connection);
 
-        // Step 3: Process the staging records.
+        // Step 3: Bulk load the CSV into the staging table.
+        $sql = sprintf(
+            "LOAD DATA LOCAL INFILE '%s'
+             INTO TABLE movies_staging
+             FIELDS TERMINATED BY ',' ENCLOSED BY '\"'
+             LINES TERMINATED BY '\n'
+             IGNORE 1 LINES
+             (id, title, vote_average, vote_count, status, release_date, revenue, runtime, budget, imdb_id, original_language, original_title, overview, popularity, tagline, genres, production_companies, production_countries, spoken_languages, cast, director, director_of_photography, writers, producers, music_composer, imdb_rating, imdb_votes, poster_path)",
+            addslashes($csvFile)
+        );
+        $connection->executeQuery($sql);
+
+        // Step 4: Process the staging records.
         // Start a transaction to ensure data integrity.
         $connection->beginTransaction();
         try {
-            $pageSize = 1000;
+            // Increase page size for better performance
+            $pageSize = 2000;
             $lastImdbId = 0;
+
+            // Define relation types once outside the loop
+            $relationTypes = [
+                ['stagingRecordField' => 'genres', 'table' => 'genres', 'junctionTable' => 'movie_genre', 'junctionColumn' => 'genre_id'],
+                ['stagingRecordField' => 'cast', 'table' => 'actors', 'junctionTable' => 'movie_actor', 'junctionColumn' => 'actor_id'],
+                ['stagingRecordField' => 'director', 'table' => 'directors', 'junctionTable' => 'movie_director', 'junctionColumn' => 'director_id']
+            ];
+
+            // Pre-initialize relation caches for all entity types
+            foreach ($relationTypes as $relationType) {
+                $entityTable = $relationType['table'];
+                $this->relationCaches[$entityTable] = [];
+
+                // Pre-load existing entities to avoid redundant inserts and queries
+                $existingEntitiesQuery = "SELECT id, name FROM $entityTable";
+                $existingEntities = $connection->fetchAllAssociative($existingEntitiesQuery);
+
+                foreach ($existingEntities as $entity) {
+                    $this->relationCaches[$entityTable][$entity['name']] = $entity['id'];
+                }
+            }
+
+            // Get total count for progress reporting
+            $totalCount = $connection->fetchOne("SELECT COUNT(*) FROM movies_staging");
+            $processedCount = 0;
 
             while (true) {
                 $query = "SELECT * FROM movies_staging WHERE id > ? ORDER BY id LIMIT " . $pageSize;
@@ -112,7 +137,9 @@ final class  CSVConverterService
                 // Batch insert movies
                 $this->batchInsert($connection, 'movies', $movieBatchData);
 
-                echo "Inserted " . count($movieBatchData) . " movies." . PHP_EOL;
+                $processedCount += count($movieBatchData);
+                $percentComplete = round(($processedCount / $totalCount) * 100, 2);
+                echo "Inserted " . count($movieBatchData) . " movies. Progress: $processedCount/$totalCount ($percentComplete%)" . PHP_EOL;
 
                 // Get mapping of TMDB IDs to database IDs
                 $placeholders = implode(',', array_fill(0, count($tmdbIds), '?'));
@@ -125,23 +152,21 @@ final class  CSVConverterService
                 }
 
                 // Process relationships for all entity types
-                $relationTypes = [
-                    ['stagingRecordField' => 'genres', 'table' => 'genres', 'junctionTable' => 'movie_genre', 'junctionColumn' => 'genre_id'],
-                    ['stagingRecordField' => 'cast', 'table' => 'actors', 'junctionTable' => 'movie_actor', 'junctionColumn' => 'actor_id'],
-                    ['stagingRecordField' => 'director', 'table' => 'directors', 'junctionTable' => 'movie_director', 'junctionColumn' => 'director_id']
-                ];
-
                 foreach ($relationTypes as $relationType) {
                     $this->processRelationsForBatch(
                         $connection,
                         $stagingRecords,
                         $movieIdMapping,
-                        $relationType,
+                        $relationType
                     );
                 }
+
+                // Commit every batch to avoid large transactions
+                $connection->commit();
+                $connection->beginTransaction();
             }
 
-            // Commit the transaction after successful processing
+            // Final commit
             $connection->commit();
             echo "Bulk import with relations completed successfully" . PHP_EOL;
         } catch (\Exception $e) {
@@ -195,21 +220,27 @@ final class  CSVConverterService
             return;
         }
 
-        $columns = array_keys($batchData[0]);
-        $params = [];
-        $rowsPlaceholders = [];
+        // For very large batches, split into smaller chunks to avoid query size limits
+        $chunkSize = 500;
+        $chunks = array_chunk($batchData, $chunkSize);
 
-        foreach ($batchData as $row) {
-            $placeholders = [];
-            foreach ($columns as $col) {
-                $placeholders[] = '?';
-                $params[] = $row[$col];
+        foreach ($chunks as $chunk) {
+            $columns = array_keys($chunk[0]);
+            $params = [];
+            $rowsPlaceholders = [];
+
+            foreach ($chunk as $row) {
+                $placeholders = [];
+                foreach ($columns as $col) {
+                    $placeholders[] = '?';
+                    $params[] = $row[$col];
+                }
+                $rowsPlaceholders[] = '(' . implode(',', $placeholders) . ')';
             }
-            $rowsPlaceholders[] = '(' . implode(',', $placeholders) . ')';
-        }
 
-        $query = 'INSERT IGNORE INTO ' . $table . ' (' . implode(',', $columns) . ') VALUES ' . implode(',', $rowsPlaceholders);
-        $connection->executeQuery($query, $params);
+            $query = 'INSERT IGNORE INTO ' . $table . ' (' . implode(',', $columns) . ') VALUES ' . implode(',', $rowsPlaceholders);
+            $connection->executeQuery($query, $params);
+        }
     }
 
     private function processRelationsForBatch(
@@ -222,8 +253,22 @@ final class  CSVConverterService
         $entityTable = $relationType['table'];
         $junctionTable = $relationType['junctionTable'];
         $junctionColumn = $relationType['junctionColumn'];
+
+        // Initialize relation cache for this entity type if not exists
+        if (!isset($this->relationCaches[$entityTable])) {
+            $this->relationCaches[$entityTable] = [];
+
+            // Pre-load existing entities to avoid redundant inserts and queries
+            $existingEntitiesQuery = "SELECT id, name FROM $entityTable";
+            $existingEntities = $connection->fetchAllAssociative($existingEntitiesQuery);
+
+            foreach ($existingEntities as $entity) {
+                $this->relationCaches[$entityTable][$entity['name']] = $entity['id'];
+            }
+        }
+
         // Extract and collect all unique relation entities for this batch
-        $allEntities = [];
+        $newEntities = [];
         $relationMap = [];
 
         foreach ($stagingRecords as $record) {
@@ -241,7 +286,11 @@ final class  CSVConverterService
             foreach ($items as $item) {
                 if (empty($item)) continue;
 
-                $allEntities[$item] = true;
+                // Check if this entity is not in our cache yet
+                if (!isset($this->relationCaches[$entityTable][$item])) {
+                    $newEntities[$item] = true;
+                }
+
                 if (!isset($relationMap[$movieId])) {
                     $relationMap[$movieId] = [];
                 }
@@ -249,35 +298,37 @@ final class  CSVConverterService
             }
         }
 
-        // Bulk insert all unique entities
-        $entityBatchData = [];
-        foreach (array_keys($allEntities) as $name) {
-            $entityBatchData[] = ['name' => $name];
-        }
+        // Only insert entities that don't already exist in our cache
+        if (!empty($newEntities)) {
+            $entityBatchData = [];
+            foreach (array_keys($newEntities) as $name) {
+                $entityBatchData[] = ['name' => $name];
+            }
 
-        if (!empty($entityBatchData)) {
-            $this->batchInsert($connection, $entityTable, $entityBatchData);
-        }
+            if (!empty($entityBatchData)) {
+                $this->batchInsert($connection, $entityTable, $entityBatchData);
+            }
 
-        // Get the IDs of the entities we just inserted
-        $placeholders = str_repeat('?,', count($allEntities) - 1) . '?';
-        $entityNames = array_keys($allEntities);
-        $entityQuery = "SELECT id, name FROM $entityTable WHERE name IN ($placeholders)";
-        $entityResults = $connection->fetchAllAssociative($entityQuery, $entityNames);
+            // Get the IDs of the entities we just inserted
+            $placeholders = str_repeat('?,', count($newEntities) - 1) . '?';
+            $entityNames = array_keys($newEntities);
+            $entityQuery = "SELECT id, name FROM $entityTable WHERE name IN ($placeholders)";
+            $entityResults = $connection->fetchAllAssociative($entityQuery, $entityNames);
 
-        $entityIdMapping = [];
-        foreach ($entityResults as $result) {
-            $entityIdMapping[$result['name']] = $result['id'];
+            // Update our cache with the new entities
+            foreach ($entityResults as $result) {
+                $this->relationCaches[$entityTable][$result['name']] = $result['id'];
+            }
         }
 
         // Build and execute junction table inserts
         $junctionBatchData = [];
         foreach ($relationMap as $movieId => $entityNames) {
             foreach ($entityNames as $name) {
-                if (isset($entityIdMapping[$name])) {
+                if (isset($this->relationCaches[$entityTable][$name])) {
                     $junctionBatchData[] = [
                         'movie_id' => $movieId,
-                        $junctionColumn => $entityIdMapping[$name]
+                        $junctionColumn => $this->relationCaches[$entityTable][$name]
                     ];
                 }
             }
@@ -361,4 +412,3 @@ final class  CSVConverterService
         return $truncated;
     }
 }
-

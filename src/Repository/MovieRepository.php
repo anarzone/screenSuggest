@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Domain\Content\Dto\Movie\MovieFilter;
 use App\Entity\Movie;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -24,18 +25,48 @@ class MovieRepository extends ServiceEntityRepository
     /**
      * Find paginated movies
      *
+     * @param MovieFilter $filter
      * @param int $limit Maximum number of movies to return
      * @param int $offset Starting position
      * @return array
      */
-    public function findPaginated(int $limit, int $offset): array
-    {
-        return $this->createQueryBuilder('m')
-            ->orderBy('m.id', 'ASC')
-            ->setMaxResults($limit)
+    public function getPaginatedFiltered(
+        MovieFilter $filter,
+        int $limit,
+        int $offset
+    ): array {
+        $qb = $this->createQueryBuilder('m')
             ->setFirstResult($offset)
+            ->setMaxResults($limit);
+
+        if ($filter->genre !== null) {
+            $qb->andWhere('m.genre = :genre')
+                ->setParameter('genre', $filter->genre);
+        }
+
+        if ($filter->year !== null) {
+            $qb->andWhere('m.releaseDate = :year')
+                ->setParameter('year', $filter->year);
+        }
+
+        if ($filter->ratingMin !== null) {
+            $qb->andWhere('m.averageRating >= :min')
+                ->setParameter('min', $filter->ratingMax);
+        }
+
+        // …add other filter criteria similarly…
+
+        $movies = $qb->getQuery()->getResult();
+
+        // count total separately (or use Doctrine Paginator)
+        $total = (clone $qb)
+            ->select('COUNT(m.id)')
+            ->setFirstResult(null)
+            ->setMaxResults(null)
             ->getQuery()
-            ->getResult();
+            ->getSingleScalarResult();
+
+        return [$movies, (int)$total];
     }
 
     /**

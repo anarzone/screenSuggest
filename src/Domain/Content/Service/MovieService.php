@@ -5,6 +5,7 @@ namespace App\Domain\Content\Service;
 use App\Domain\Content\Dto\ContentDtoInterface;
 use App\Domain\Content\Dto\Director\DirectorDto;
 use App\Domain\Content\Dto\Movie\MovieDto;
+use App\Domain\Content\Dto\Movie\MovieFilter;
 use App\Domain\Content\Hydrator\MovieHydrator;
 use App\Domain\Content\ValueObject\Content\Duration;
 use App\Domain\Content\ValueObject\Content\Title;
@@ -35,16 +36,11 @@ final readonly class MovieService
     {
         return $this->movieHydrator->hydrateCollection($this->movieRepository->findAll());
     }
-    
-    public function getPaginated(int $limit, int $offset): array
+
+    public function getPaginatedFiltered(MovieFilter $filter, int $limit, int $offset): array
     {
-        $movies = $this->movieRepository->findPaginated($limit, $offset);
+        $movies = $this->movieRepository->getPaginatedFiltered($filter, $limit, $offset);
         return $this->movieHydrator->hydrateCollection($movies);
-    }
-    
-    public function countTotal(): int
-    {
-        return $this->movieRepository->countTotal();
     }
 
     public function single(Movie $movie): ContentDtoInterface
