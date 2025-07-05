@@ -5,7 +5,6 @@ namespace App\Domain\Content\Controller;
 use App\Domain\Content\Dto\Movie\MovieDto;
 use App\Domain\Content\Dto\Movie\MovieFilter;
 use App\Domain\Content\Hydrator\MovieHydrator;
-use App\Domain\Content\Service\CSVConverterService;
 use App\Domain\Content\Service\MovieService;
 use App\Domain\Content\Service\PaginationService;
 use App\Repository\MovieRepository;
@@ -66,7 +65,7 @@ class MovieController extends AbstractController
 
         return $this->json(
             [
-                'message' => 'Movie found!',
+                'message' => 'Movie retrieved successfully',
                 'data' => $this->movieService->single($movie)
             ]
         );

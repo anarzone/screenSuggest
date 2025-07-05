@@ -9,9 +9,11 @@ final class MovieFilter
     public function __construct(
         public ?string $genre,
         public ?int    $year,
-        public ?float  $ratingMin,
-        public ?float  $ratingMax
-    ) {}
+        public ?float  $imdbRatingMin,
+        public ?float  $imdbRatingMax
+    )
+    {
+    }
 
     public static function fromRequest(Request $request): self
     {

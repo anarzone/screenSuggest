@@ -37,73 +37,45 @@ class MovieRepository extends ServiceEntityRepository
     ): array {
         $qb = $this->createQueryBuilder('m')
             ->setFirstResult($offset)
-            ->setMaxResults($limit);
+            ->setMaxResults($limit)
+            ->andWhere("COALESCE(TRIM(m.title), '') <> ''")
+            ->groupBy('m.id');
+
+        // Add a left join with reviews to calculate average in-site rating
+//        $qb->leftJoin('m.reviews', 'r')
+//           ->groupBy('m.id');
 
         if ($filter->genre !== null) {
-            $qb->andWhere('m.genre = :genre')
-                ->setParameter('genre', $filter->genre);
+            $qb->join('m.genres', 'g')
+               ->andWhere('g.name = :genre')
+               ->setParameter('genre', $filter->genre);
         }
 
         if ($filter->year !== null) {
-            $qb->andWhere('m.releaseDate = :year')
-                ->setParameter('year', $filter->year);
+            $qb->andWhere('year(m.releaseDate) = :year')
+               ->setParameter('year', $filter->year);
         }
 
-        if ($filter->ratingMin !== null) {
-            $qb->andWhere('m.averageRating >= :min')
-                ->setParameter('min', $filter->ratingMax);
+        if ($filter->imdbRatingMin !== null) {
+            $qb->andHaving('AVG(m.imdbRating) >= :min')
+               ->setParameter('min', $filter->imdbRatingMin);
         }
 
-        // …add other filter criteria similarly…
+        if ($filter->imdbRatingMax !== null) {
+            $qb->andHaving('AVG(m.imdbRating) <= :max')
+               ->setParameter('max', $filter->imdbRatingMax);
+        }
 
         $movies = $qb->getQuery()->getResult();
 
         // count total separately (or use Doctrine Paginator)
         $total = (clone $qb)
-            ->select('COUNT(m.id)')
+            ->select('COUNT(DISTINCT m.id)')
             ->setFirstResult(null)
             ->setMaxResults(null)
             ->getQuery()
-            ->getSingleScalarResult();
+            ->getResult();
 
         return [$movies, (int)$total];
     }
-
-    /**
-     * Count total number of movies
-     *
-     * @return int
-     */
-    public function countTotal(): int
-    {
-        return $this->createQueryBuilder('m')
-            ->select('COUNT(m.id)')
-            ->getQuery()
-            ->getSingleScalarResult();
-    }
-
-//    /**
-//     * @return Movie[] Returns an array of Movie objects
-//     */
-//    public function findByExampleField($value): array
-//    {
-//        return $this->createQueryBuilder('m')
-//            ->andWhere('m.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->orderBy('m.id', 'ASC')
-//            ->setMaxResults(10)
-//            ->getQuery()
-//            ->getResult()
-//        ;
-//    }
-
-//    public function findOneBySomeField($value): ?Movie
-//    {
-//        return $this->createQueryBuilder('m')
-//            ->andWhere('m.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->getQuery()
-//            ->getOneOrNullResult()
-//        ;
-//    }
 }
