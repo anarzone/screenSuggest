@@ -29,7 +29,7 @@ class MovieController extends AbstractController
 
     #[Route(
         '/movies',
-        name: 'movies_all',
+        name: 'movies',
         methods: ['GET']
     )]
     public function index(Request $request): JsonResponse

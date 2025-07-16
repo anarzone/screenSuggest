@@ -35,6 +35,9 @@ doctrine:
                 dql:
                     datetime_functions:
                         year: DoctrineExtensions\Query\Mysql\Year
+                    string_functions:
+                        cast: DoctrineExtensions\Query\Mysql\Cast
+                        field: DoctrineExtensions\Query\Mysql\Field
             dataset:
                 connection: dataset
                 mappings:
@@ -47,7 +50,6 @@ doctrine:
                 dql:
                     datetime_functions:
                         year: DoctrineExtensions\Query\Mysql\Year
-
 
 when@test:
     doctrine:

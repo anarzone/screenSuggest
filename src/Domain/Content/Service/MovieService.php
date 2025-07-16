@@ -39,7 +39,7 @@ final readonly class MovieService
 
     public function getPaginatedFiltered(MovieFilter $filter, int $limit, int $offset): array
     {
-        [$movies, $total] = $this->movieRepository->getPaginatedFiltered($filter, $limit, $offset);
+        [$movies, $total] = $this->movieRepository->searchAndFilter($filter, $limit, $offset);
 
         return [$this->movieHydrator->hydrateCollection($movies), $total];
     }
