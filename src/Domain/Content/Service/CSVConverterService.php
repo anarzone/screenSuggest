@@ -8,59 +8,67 @@ use Doctrine\DBAL\Connection;
 use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-final class  CSVConverterService
+final class CSVConverterService
 {
-    /**
-     * Caches to avoid duplicate lookups for relations.
-     *
-     * Structure:
-     * [
-     *   'genres' => [ 'Action' => 1, 'Drama' => 2, ... ],
-     *   'actors' => [ 'John Doe' => 5, ... ],
-     *   // etc.
-     * ]
-     */
     private array $relationCaches;
 
     public function __construct(
         private ManagerRegistry $managerRegistry,
-    )
-    {
+    ) {
         $this->relationCaches = [];
     }
 
-    /**
-     * Bulk import movies using a staging table approach.
-     *
-     * This method does the following:
-     * 1. Creates (or truncates) the staging table.
-     * 2. Uses LOAD DATA LOCAL INFILE to quickly import the CSV into the staging table.
-     * 3. Processes each staging record:
-     *    - Inserts a new record into the main movies table.
-     *    - Parses and inserts related values (genres, production companies, etc.)
-     *       into the respective relation tables and junction tables.
-     */
-    public function bulkImportMoviesWithRelations(): void
+    public function importMovies(bool $forceReload = false): void
     {
-        $csvFile = dirname(__DIR__, 3) . '/Domain/Content/dataset/TMDB_all_movies.csv';
-
-        if (!file_exists($csvFile)) {
-            throw new NotFoundHttpException('CSV file not found');
-        }
-
         $entityManager = $this->managerRegistry->getManager('dataset');
         $connection = $entityManager->getConnection();
 
-        // Step 1: Truncate all target tables to start fresh
-        $this->truncateTargetTables($connection);
+        $csvExists = $this->csvFileExists();
 
-        // Step 2: Create or truncate the staging table.
+        if ($forceReload) {
+            if (!$csvExists) {
+                throw new NotFoundHttpException('CSV file not found and no data in staging table');
+            }
+            $this->loadCsvToStaging($connection);
+        }
+
+        $this->processFromStaging($connection);
+    }
+
+    /**
+     * Check if CSV file exists
+     */
+    private function csvFileExists(): bool
+    {
+        $csvFile = $this->getCsvFilePath();
+        return file_exists($csvFile);
+    }
+
+    /**
+     * Get CSV file path
+     */
+    private function getCsvFilePath(): string
+    {
+        return dirname(__DIR__, 3) . '/Domain/Content/dataset/TMDB_all_movies.csv';
+    }
+
+    /**
+     * Load CSV data into staging table
+     */
+    private function loadCsvToStaging(Connection $connection): void
+    {
+        $csvFile = $this->getCsvFilePath();
+
+        echo "Loading CSV data into staging table..." . PHP_EOL;
+
+        // Create or truncate the staging table
         $this->createOrTruncateStagingTable($connection);
 
-        // Step 3: Bulk load the CSV into the staging table.
+        // Bulk load the CSV into the staging table
         $sql = sprintf(
             "LOAD DATA LOCAL INFILE '%s'
              INTO TABLE movies_staging
+             CHARACTER SET utf8mb4
              FIELDS TERMINATED BY ',' ENCLOSED BY '\"'
              LINES TERMINATED BY '\n'
              IGNORE 1 LINES
@@ -69,27 +77,36 @@ final class  CSVConverterService
         );
         $connection->executeQuery($sql);
 
-        // Step 4: Process the staging records.
-        // Start a transaction to ensure data integrity.
+        echo "CSV data loaded into staging table successfully" . PHP_EOL;
+    }
+
+    /**
+     * Process data from staging table to main tables
+     */
+    private function processFromStaging(Connection $connection): void
+    {
+        echo "Processing data from staging table..." . PHP_EOL;
+
+        // Truncate target tables
+        $this->truncateTargetTables($connection);
+
+        // Process the staging records
         $connection->beginTransaction();
         try {
-            // Increase page size for better performance
             $pageSize = 2000;
             $lastImdbId = 0;
 
-            // Define relation types once outside the loop
             $relationTypes = [
                 ['stagingRecordField' => 'genres', 'table' => 'genres', 'junctionTable' => 'movie_genre', 'junctionColumn' => 'genre_id'],
                 ['stagingRecordField' => 'cast', 'table' => 'actors', 'junctionTable' => 'movie_actor', 'junctionColumn' => 'actor_id'],
                 ['stagingRecordField' => 'director', 'table' => 'directors', 'junctionTable' => 'movie_director', 'junctionColumn' => 'director_id']
             ];
 
-            // Pre-initialize relation caches for all entity types
+            // Pre-initialize relation caches
             foreach ($relationTypes as $relationType) {
                 $entityTable = $relationType['table'];
                 $this->relationCaches[$entityTable] = [];
 
-                // Pre-load existing entities to avoid redundant inserts and queries
                 $existingEntitiesQuery = "SELECT id, name FROM $entityTable";
                 $existingEntities = $connection->fetchAllAssociative($existingEntitiesQuery);
 
@@ -98,7 +115,6 @@ final class  CSVConverterService
                 }
             }
 
-            // Get total count for progress reporting
             $totalCount = $connection->fetchOne("SELECT COUNT(*) FROM movies_staging");
             $processedCount = 0;
 
@@ -111,7 +127,7 @@ final class  CSVConverterService
                 }
 
                 $movieBatchData = [];
-                $tmdbIds = []; // Store movie IDs for relation processing
+                $tmdbIds = [];
 
                 foreach ($stagingRecords as $record) {
                     $lastImdbId = $record['id'];
@@ -134,14 +150,12 @@ final class  CSVConverterService
                     ];
                 }
 
-                // Batch insert movies
                 $this->batchInsert($connection, 'movies', $movieBatchData);
 
                 $processedCount += count($movieBatchData);
                 $percentComplete = round(($processedCount / $totalCount) * 100, 2);
-                echo "Inserted " . count($movieBatchData) . " movies. Progress: $processedCount/$totalCount ($percentComplete%)" . PHP_EOL;
+                echo "Processed " . count($movieBatchData) . " movies. Progress: $processedCount/$totalCount ($percentComplete%)" . PHP_EOL;
 
-                // Get mapping of TMDB IDs to database IDs
                 $placeholders = implode(',', array_fill(0, count($tmdbIds), '?'));
                 $idMappingQuery = "SELECT id, tmdb_id FROM movies WHERE tmdb_id IN ($placeholders)";
                 $mappingResults = $connection->fetchAllAssociative($idMappingQuery, $tmdbIds);
@@ -151,7 +165,6 @@ final class  CSVConverterService
                     $movieIdMapping[$result['tmdb_id']] = $result['id'];
                 }
 
-                // Process relationships for all entity types
                 foreach ($relationTypes as $relationType) {
                     $this->processRelationsForBatch(
                         $connection,
@@ -161,14 +174,12 @@ final class  CSVConverterService
                     );
                 }
 
-                // Commit every batch to avoid large transactions
                 $connection->commit();
                 $connection->beginTransaction();
             }
 
-            // Final commit
             $connection->commit();
-            echo "Bulk import with relations completed successfully" . PHP_EOL;
+            echo "Import completed successfully" . PHP_EOL;
         } catch (\Exception $e) {
             $connection->rollBack();
             echo "Error during import: " . $e->getMessage() . PHP_EOL;
@@ -176,6 +187,7 @@ final class  CSVConverterService
         }
     }
 
+    // ... rest of your existing methods remain the same
     private function createOrTruncateStagingTable(Connection $connection): void
     {
         $createTableSQL = "
@@ -209,6 +221,7 @@ final class  CSVConverterService
                 imdb_votes INT DEFAULT NULL,
                 poster_path VARCHAR(255) DEFAULT NULL
             )
+            DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
         ";
         $connection->executeQuery($createTableSQL);
         $connection->executeQuery("TRUNCATE TABLE movies_staging");
