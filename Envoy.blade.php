@@ -60,8 +60,6 @@
     update_env
     run_composer
     decrypt_secrets
-    sync_migrations
-    mark_migrations
     run_migrations
     install_assets
     update_symlinks
@@ -105,14 +103,6 @@
     cd {{ $new_release_dir }}
     echo "Decrypting secrets"
     SYMFONY_DECRYPTION_SECRET="{{ $secret }}" {{ $phpPath }} bin/console secrets:decrypt-to-local -vvv --force --no-interaction --no-debug
-@endtask
-
-@task('sync_migrations')
-    {{ $phpPath }} bin/console doctrine:migrations:sync-metadata-storage --no-interaction
-@endtask
-
-@task('mark_migrations')
-    {{ $phpPath }} bin/console doctrine:migrations:version --add --all --no-interaction
 @endtask
 
 @task('run_migrations')
