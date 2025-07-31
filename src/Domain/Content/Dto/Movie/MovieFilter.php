@@ -11,7 +11,9 @@ final class MovieFilter
         public ?string $genre,
         public ?int    $year,
         public ?float  $imdbRatingMin,
-        public ?float  $imdbRatingMax
+        public ?float  $imdbRatingMax,
+        public ?string $sortBy = null,
+        public ?string $sortOrder = null,
     )
     {
     }
@@ -23,7 +25,9 @@ final class MovieFilter
             $request->query->get('genre') ?: null,
             $request->query->getInt('year') ?: null,
             $request->query->get('ratingMin') ?: null,
-            $request->query->get('ratingMax') ?: null
+            $request->query->get('ratingMax') ?: null,
+            $request->query->get('sortBy') ?: null,
+            $request->query->get('sortOrder') ?: null
         );
     }
 
@@ -38,5 +42,24 @@ final class MovieFilter
             !empty($this->year) ||
             !empty($this->imdbRatingMin) ||
             !empty($this->imdbRatingMax);
+    }
+
+    public function hasSort(): bool
+    {
+        return !empty($this->sortBy);
+    }
+
+    public function getSortBy(): ?string
+    {
+        $allowedSortFields = [
+            'title', 'releaseDate', 'imdbRating', 'duration', 'createdAt'
+        ];
+
+        return in_array($this->sortBy, $allowedSortFields) ? $this->sortBy : 'releaseDate';
+    }
+
+    public function getSortOrder(): string
+    {
+        return strtolower($this->sortOrder) === 'asc' ? 'ASC' : 'DESC';
     }
 }

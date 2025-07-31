@@ -23,7 +23,7 @@ class ExceptionSubscriber implements EventSubscriberInterface, LoggerAwareInterf
     public function onKernelException(ExceptionEvent $event): void
     {
         $exception = $event->getThrowable();
-
+dd($exception);
         $this->logger->error(
             sprintf(
                 'Exception occurred: %s in %s:%d, trace: %s',
