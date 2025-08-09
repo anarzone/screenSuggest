@@ -26,7 +26,7 @@ final readonly class GenreService
             offset: $offset,
         );
 
-        $total = $this->genresRepository->count([]);
+        $total = $this->genresRepository->count();
 
         $data = array_map(static function (Genre $genre): array {
             return [

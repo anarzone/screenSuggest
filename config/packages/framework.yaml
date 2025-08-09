@@ -8,7 +8,10 @@ framework:
 
     #esi: true
     #fragments: true
-
+    profiler:
+        enabled: true
+        only_exceptions: false
+        collect: true
 when@test:
     framework:
         test: true

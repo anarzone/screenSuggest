@@ -7,6 +7,7 @@ use App\Domain\Content\Dto\Movie\MovieFilter;
 use App\Domain\Content\Hydrator\MovieHydrator;
 use App\Domain\Content\Service\MovieService;
 use App\Domain\Content\Service\PaginationService;
+use App\Entity\Movie;
 use App\Repository\MovieRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -19,10 +20,10 @@ class MovieController extends AbstractController
 {
     public function __construct(
         readonly private ValidatorInterface $validator,
-        readonly private MovieHydrator $movieHydrator,
-        readonly private MovieService $movieService,
-        readonly private MovieRepository $movieRepository,
-        readonly private PaginationService $paginationService
+        readonly private MovieHydrator      $movieHydrator,
+        readonly private MovieService       $movieService,
+        readonly private MovieRepository    $movieRepository,
+        readonly private PaginationService  $paginationService
     )
     {
     }
@@ -35,7 +36,7 @@ class MovieController extends AbstractController
     public function index(Request $request): JsonResponse
     {
         $pagination = $this->paginationService->getPaginationParameters($request);
-        $filter     = MovieFilter::fromRequest($request);
+        $filter = MovieFilter::fromRequest($request);
 
         [$movies, $total] = $this->movieService->getPaginatedFiltered(
             $filter,
@@ -44,14 +45,31 @@ class MovieController extends AbstractController
         );
 
         return $this->json([
-            'message'    => 'Movies retrieved successfully',
-            'data'       => $movies,
+            'message' => 'Movies retrieved successfully',
+            'data' => $movies,
             'pagination' => $this->paginationService->createPaginationData(
                 $pagination['page'],
                 $pagination['limit'],
                 $total
             ),
         ]);
+    }
+
+    #[Route('/movies/similar/{id}', name: 'movies_similar', methods: ['GET'])]
+    public function getSimilarMovies(?Movie $movie): JsonResponse
+    {
+        if ($movie === null) {
+            return $this->json(['message' => 'Movie not found!', 'data' => []], Response::HTTP_NOT_FOUND);
+        }
+
+        $similarMovies = $this->movieService->getSimilarMovies($movie);
+
+        return $this->json(
+            [
+                'message' => 'Similar movies retrieved successfully',
+                'data' => $similarMovies
+            ]
+        );
     }
 
     #[Route('/movies/{id}', name: 'movies_show', methods: ['GET'])]
