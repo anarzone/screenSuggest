@@ -78,9 +78,19 @@ class MovieRepository extends ServiceEntityRepository
                 ->setParameter('genre', '%' . $filter->genre . '%');
         }
 
-        if ($filter->year) {
-            $qb->andWhere('YEAR(m.releaseDate) = :year')
-                ->setParameter('year', $filter->year);
+        if ($filter->yearStart && $filter->yearEnd) {
+            $qb->andWhere('m.releaseDate BETWEEN :startDate AND :endDate')
+                ->setParameter('startDate', new \DateTimeImmutable($filter->yearStart . '-01-01'))
+                ->setParameter('endDate',   new \DateTimeImmutable($filter->yearEnd   . '-12-31'));
+        } else {
+            if ($filter->yearStart) {
+                $qb->andWhere('m.releaseDate >= :startDate')
+                    ->setParameter('startDate', new \DateTimeImmutable($filter->yearStart . '-01-01'));
+            }
+            if ($filter->yearEnd) {
+                $qb->andWhere('m.releaseDate <= :endDate')
+                    ->setParameter('endDate', new \DateTimeImmutable($filter->yearEnd . '-12-31'));
+            }
         }
 
         if ($filter->imdbRatingMin) {
@@ -97,73 +107,14 @@ class MovieRepository extends ServiceEntityRepository
     private function performAdvancedSearch(MovieFilter $filter): array
     {
         $query = $filter->query;
-        $category = $filter->category ?? 'all'; // Todo: define categories properly. What is category?
-        $limit = 200; // update this limit based on your needs
+        $limit = 200;
 
         if (strlen(trim($query)) < 3) {
             return [];
         }
 
-        // Category-specific search Todo: I think there is a mistake here. Rework this part
-        if ($category !== 'all') {
-            return match ($category) {
-                'genre' => $this->searchByGenre($query, $limit),
-                'actor' => $this->searchByActor($query, $limit),
-                'director' => $this->searchByDirector($query, $limit),
-                default => []
-            };
-        }
-
-        // Full search with fallback strategies (same logic as MovieSearchService)
-
-        // Step 1: Try exact title matches first
-        $exactMatches = $this->searchMoviesByCriteria($filter, $limit, 50); // Todo: adjust threshold as needed
-
-        if (!empty($exactMatches)) {
-            return array_slice($exactMatches, 0, $limit);
-        }
-
-        // Step 2: Try full-text search with medium threshold
-        $fullTextMatches = $this->searchMoviesByCriteria($filter, $limit, 2); // Todo: adjust threshold as needed
-        if (count($fullTextMatches) >= $limit) {
-            return array_slice($fullTextMatches, 0, $limit);
-        }
-
-        // Step 3: Try searching with related entities
-        $additionalMovies = $this->searchMoviesWithRelations($filter, $limit);
-        $movies = $this->mergeResults($fullTextMatches, $additionalMovies, $limit);
-
-        // Step 4: Final fallback with very low threshold
-        if (count($movies) < $limit / 2) {
-            $fallbackMatches = $this->searchMoviesByCriteria($filter, $limit * 2, 1);
-            $movies = $this->mergeResults($movies, $fallbackMatches, $limit);
-        }
-
-        return array_slice($movies, 0, $limit);
-    }
-
-    private function mergeResults(array $primary, array $secondary, int $limit): array
-    {
-        $seen = [];
-        $merged = [];
-
-        // Add primary results first (they have higher relevance)
-        foreach ($primary as $movie) {
-            if (!isset($seen[$movie->getId()]) && count($merged) < $limit) {
-                $merged[] = $movie;
-                $seen[$movie->getId()] = true;
-            }
-        }
-
-        // Add secondary results if we need more
-        foreach ($secondary as $movie) {
-            if (!isset($seen[$movie->getId()]) && count($merged) < $limit) {
-                $merged[] = $movie;
-                $seen[$movie->getId()] = true;
-            }
-        }
-
-        return $merged;
+        // Use fuzzy search for better results
+        return $this->searchMoviesByCriteriaWithFuzzy($filter, $limit);
     }
 
     public function searchMoviesByCriteria(MovieFilter $filter, int $limit = 10, float $minScore = 0.1): array
@@ -178,8 +129,9 @@ class MovieRepository extends ServiceEntityRepository
                   AS text_score
                 FROM movies
                 WHERE
-                    MATCH(title, original_title, description) AGAINST(:query IN BOOLEAN MODE)
-                 OR MATCH(production_companies, production_countries) AGAINST(:query IN BOOLEAN MODE)
+                    imdb_rating IS NOT NULL AND imdb_rating > 0 AND
+                    (MATCH(title, original_title, description) AGAINST(:query IN BOOLEAN MODE)
+                 OR MATCH(production_companies, production_countries) AGAINST(:query IN BOOLEAN MODE))
             )
             SELECT
                 m.*,
@@ -202,7 +154,6 @@ class MovieRepository extends ServiceEntityRepository
             $sortOrder = $filter->getSortOrder();
             $sql .= ' ORDER BY m.' . $this->convertCamelToSnakeCase($sortBy) . ' ' . $sortOrder . ' ';
         } else {
-            // Default sorting by relevance score and release date
             $sql .= ' ORDER 
                     BY (LOWER(m.title) = LOWER(:exact_query_order_by)) DESC,
                        (LOWER(m.original_title) = LOWER(:exact_query_order_by)) DESC,
@@ -214,7 +165,7 @@ class MovieRepository extends ServiceEntityRepository
         $stmt = $this->getEntityManager()->getConnection()->prepare($sql);
         $stmt->bindValue('query', $this->prepareSearchQuery($query));
         if (!$filter->hasSort()) {
-            $stmt->bindValue('exact_query_order_by', trim($query));;
+            $stmt->bindValue('exact_query_order_by', trim($query));
         }
         $stmt->bindValue('exact_query', trim($query));
         $stmt->bindValue('like_query', trim($query));
@@ -223,120 +174,11 @@ class MovieRepository extends ServiceEntityRepository
 
         $result = $stmt->executeQuery();
         $movieData = $result->fetchAllAssociative();
-        $movies = [];
-        foreach ($movieData as $row) {
-            if ($movie = $this->find($row['id'])) {
-                $movies[] = $movie;
-            }
-        }
-        return $movies;
+
+        return $this->fetchMoviesByIds(array_column($movieData, 'id'));
     }
 
-    public function searchMoviesWithRelations(MovieFilter $filter, int $limit = 10): array
-    {
-        $query = $filter->query;
 
-        $sql = '
-            SELECT DISTINCT m.id, 
-                   (
-                       -- Movie title/description matching (highest priority) - using composite indexes
-                       COALESCE(MATCH(m.title, m.original_title, m.description) AGAINST(:query IN BOOLEAN MODE), 0) * 8 +
-                       COALESCE(MATCH(m.production_companies, m.production_countries) AGAINST(:query IN BOOLEAN MODE), 0) * 3 +
-                       -- Related entities (lower priority) - using their respective indexes
-                       COALESCE(MATCH(g.name) AGAINST(:query IN BOOLEAN MODE), 0) * 2 +
-                       COALESCE(MATCH(a.name, a.biography, a.also_known_as) AGAINST(:query IN BOOLEAN MODE), 0) * 2 +
-                       COALESCE(MATCH(d.name) AGAINST(:query IN BOOLEAN MODE), 0) * 2 +
-                       -- Exact matches bonus
-                       CASE WHEN LOWER(m.title) = LOWER(:exact_query) THEN 50 ELSE 0 END +
-                       CASE WHEN LOWER(m.original_title) = LOWER(:exact_query) THEN 45 ELSE 0 END
-                   ) as total_score
-            FROM movies m
-            LEFT JOIN movie_genre mg ON m.id = mg.movie_id
-            LEFT JOIN genres g ON mg.genre_id = g.id
-            LEFT JOIN movie_actor ma ON m.id = ma.movie_id
-            LEFT JOIN actors a ON ma.actor_id = a.id
-            LEFT JOIN movie_director md ON m.id = md.director_id
-            LEFT JOIN directors d ON md.director_id = d.id
-            WHERE (
-                MATCH(m.title, m.original_title, m.description) AGAINST(:query IN BOOLEAN MODE) OR
-                MATCH(m.production_companies, m.production_countries) AGAINST(:query IN BOOLEAN MODE) OR
-                MATCH(g.name) AGAINST(:query IN BOOLEAN MODE) OR
-                MATCH(a.name, a.biography, a.also_known_as) AGAINST(:query IN BOOLEAN MODE) OR
-                MATCH(d.name) AGAINST(:query IN BOOLEAN MODE) OR
-                LOWER(m.title) = LOWER(:exact_query) OR
-                LOWER(m.original_title) = LOWER(:exact_query)
-            )
-            HAVING total_score > 0.1';
-        if ($filter->hasSort()) {
-            $sortBy = $filter->getSortBy();
-            $sortOrder = $filter->getSortOrder();
-
-            $sql .= ' ORDER BY m.' . $this->convertCamelToSnakeCase($sortBy) . ' ' . $sortOrder . ' ';
-        } else {
-            $sql .= '
-                ORDER BY total_score DESC, 
-                         m.releaseDate DESC, 
-                         m.imdbRating DESC';
-        }
-
-        $sql .= ' LIMIT :limit';
-
-        $stmt = $this->getEntityManager()->getConnection()->prepare($sql);
-        $stmt->bindValue('query', $this->prepareSearchQuery($query));
-        $stmt->bindValue('exact_query', trim($query));
-        $stmt->bindValue('limit', $limit, \PDO::PARAM_INT);
-
-        $result = $stmt->executeQuery();
-        $movieIds = array_column($result->fetchAllAssociative(), 'id');
-
-        if (empty($movieIds)) {
-            return [];
-        }
-
-        // Preserve the order from our relevance scoring
-        $movies = [];
-        foreach ($movieIds as $id) {
-            $movie = $this->find($id);
-            if ($movie) {
-                $movies[] = $movie;
-            }
-        }
-
-        return $movies;
-    }
-
-    public function searchByGenre(string $genreName, int $limit = 10): array
-    {
-        return $this->createQueryBuilder('m')
-            ->join('m.genres', 'g')
-            ->where('MATCH(g.name) AGAINST(:query IN BOOLEAN MODE)')
-            ->setParameter('query', $this->prepareSearchQuery($genreName))
-            ->setMaxResults($limit)
-            ->getQuery()
-            ->getResult();
-    }
-
-    public function searchByActor(string $actorName, int $limit = 10): array
-    {
-        return $this->createQueryBuilder('m')
-            ->join('m.actors', 'a')
-            ->where('MATCH(a.name, a.biography, a.also_known_as) AGAINST(:query IN BOOLEAN MODE)')
-            ->setParameter('query', $this->prepareSearchQuery($actorName))
-            ->setMaxResults($limit)
-            ->getQuery()
-            ->getResult();
-    }
-
-    public function searchByDirector(string $directorName, int $limit = 10): array
-    {
-        return $this->createQueryBuilder('m')
-            ->join('m.directors', 'd')
-            ->where('MATCH(d.name) AGAINST(:query IN BOOLEAN MODE)')
-            ->setParameter('query', $this->prepareSearchQuery($directorName))
-            ->setMaxResults($limit)
-            ->getQuery()
-            ->getResult();
-    }
 
     public function getSearchSuggestions(string $query, int $limit = 5): array
     {
@@ -384,12 +226,27 @@ class MovieRepository extends ServiceEntityRepository
                 ->setParameter('genre', '%' . $filter->genre . '%');
         }
 
-        if ($filter->year) {
-            $qb->andWhere('YEAR(m.releaseDate) = :year')
-                ->setParameter('year', $filter->year);
+        if ($filter->yearStart && $filter->yearEnd) {
+            $qb->andWhere('m.releaseDate BETWEEN :startDate AND :endDate')
+                ->setParameter('startDate', new \DateTimeImmutable($filter->yearStart . '-01-01'))
+                ->setParameter('endDate',   new \DateTimeImmutable($filter->yearEnd   . '-12-31'));
 
-            $countQb->andWhere('YEAR(m.releaseDate) = :year')
-                ->setParameter('year', $filter->year);
+            $countQb->andWhere('m.releaseDate BETWEEN :startDate AND :endDate')
+                ->setParameter('startDate', new \DateTimeImmutable($filter->yearStart . '-01-01'))
+                ->setParameter('endDate',   new \DateTimeImmutable($filter->yearEnd   . '-12-31'));
+        } else {
+            if ($filter->yearStart) {
+                $qb->andWhere('m.releaseDate >= :startDate')
+                    ->setParameter('startDate', new \DateTimeImmutable($filter->yearStart . '-01-01'));
+                $countQb->andWhere('m.releaseDate >= :startDate')
+                    ->setParameter('startDate', new \DateTimeImmutable($filter->yearStart . '-01-01'));
+            }
+            if ($filter->yearEnd) {
+                $qb->andWhere('m.releaseDate <= :endDate')
+                    ->setParameter('endDate', new \DateTimeImmutable($filter->yearEnd . '-12-31'));
+                $countQb->andWhere('m.releaseDate <= :endDate')
+                    ->setParameter('endDate', new \DateTimeImmutable($filter->yearEnd . '-12-31'));
+            }
         }
 
         if ($filter->imdbRatingMin) {
@@ -448,6 +305,191 @@ class MovieRepository extends ServiceEntityRepository
 
         // Multiple words - require all words with wildcards
         return '+' . implode('* +', $words) . '*';
+    }
+
+    public function searchMoviesByCriteriaWithFuzzy(MovieFilter $filter, int $limit = 10, float $minScore = 0.1): array
+    {
+        $query = $filter->query;
+        $sql = '
+            WITH fuzzy_scores AS (
+                SELECT DISTINCT
+                    id,
+                    title,
+                    original_title,
+                    -- Exact match scoring (highest priority)
+                    CASE 
+                        WHEN LOWER(title) = LOWER(:exact_query) THEN 100
+                        WHEN LOWER(original_title) = LOWER(:exact_query) THEN 95
+                        ELSE 0 
+                    END as exact_score,
+                    
+                    -- Enhanced prefix matching with word boundary support
+                    GREATEST(
+                        CASE 
+                            WHEN LOWER(title) LIKE LOWER(CONCAT(:like_query, "%")) THEN 50
+                            WHEN LOWER(original_title) LIKE LOWER(CONCAT(:like_query, "%")) THEN 45
+                            ELSE 0 
+                        END,
+                        -- Word-start matching (for "forr" matching "Forrest Gump")
+                        CASE 
+                            WHEN LENGTH(:clean_query) >= 3 AND LOWER(title) LIKE LOWER(CONCAT(:clean_query, "%")) THEN 60
+                            WHEN LENGTH(:clean_query) >= 3 AND LOWER(title) LIKE LOWER(CONCAT("% ", :clean_query, "%")) THEN 50
+                            WHEN LENGTH(:clean_query) >= 3 AND LOWER(original_title) LIKE LOWER(CONCAT(:clean_query, "%")) THEN 55
+                            WHEN LENGTH(:clean_query) >= 3 AND LOWER(original_title) LIKE LOWER(CONCAT("% ", :clean_query, "%")) THEN 45
+                            ELSE 0 
+                        END
+                    ) as prefix_score,
+                    
+                    -- Full-text search
+                    COALESCE(MATCH(title, original_title, description) AGAINST(:query IN BOOLEAN MODE), 0) * 10 as fulltext_score,
+                    
+                    -- Fuzzy matching using length-based similarity and substring matching
+                    GREATEST(
+                        -- Substring similarity
+                        CASE 
+                            WHEN :clean_query != "" AND title != "" THEN
+                                GREATEST(0, 30 - ABS(LENGTH(title) - LENGTH(:clean_query)) * 2) *
+                                (LOCATE(LOWER(:clean_query), LOWER(title)) > 0 OR LOCATE(LOWER(title), LOWER(:clean_query)) > 0)
+                            ELSE 0 
+                        END,
+                        -- Original title similarity
+                        CASE 
+                            WHEN :clean_query != "" AND original_title != "" THEN
+                                GREATEST(0, 25 - ABS(LENGTH(original_title) - LENGTH(:clean_query)) * 2) *
+                                (LOCATE(LOWER(:clean_query), LOWER(original_title)) > 0)
+                            ELSE 0 
+                        END
+                    ) as fuzzy_score,
+                    
+                    -- SOUNDEX phonetic matching
+                    CASE 
+                        WHEN SOUNDEX(title) = SOUNDEX(:clean_query) THEN 25
+                        WHEN SOUNDEX(original_title) = SOUNDEX(:clean_query) THEN 20
+                        ELSE 0 
+                    END as phonetic_score,
+                    
+                    -- Enhanced popularity scoring
+                    (
+                        -- Weighted rating considering vote count reliability  
+                        (imdb_rating * LOG10(GREATEST(imdb_votes, 1) + 1)) * 3 +
+                        -- Cultural significance bonus (9.0+ rating with 500k+ votes)
+                        CASE WHEN imdb_rating >= 9.0 AND imdb_votes >= 500000 THEN 50 ELSE 0 END +
+                        -- Classic movie bonus (8.5+ rating from before 2000)
+                        CASE WHEN imdb_rating >= 8.5 AND YEAR(release_date) < 2000 THEN 30 ELSE 0 END +
+                        -- Popular modern movies (8.0+ with 1M+ votes)
+                        CASE WHEN imdb_rating >= 8.0 AND imdb_votes >= 1000000 THEN 25 ELSE 0 END
+                    ) as popularity_boost
+                    
+                FROM movies
+                WHERE 
+                    -- Filter out movies without IMDB ratings
+                    imdb_rating IS NOT NULL AND imdb_rating > 0 AND
+                    -- Pre-filter to reduce dataset
+                    (
+                        LOWER(title) LIKE LOWER(CONCAT("%", :like_query, "%")) OR
+                        LOWER(original_title) LIKE LOWER(CONCAT("%", :like_query, "%")) OR
+                        MATCH(title, original_title, description) AGAINST(:query IN BOOLEAN MODE) OR
+                        SOUNDEX(title) = SOUNDEX(:clean_query) OR
+                        SOUNDEX(original_title) = SOUNDEX(:clean_query)
+                    )
+            )
+            SELECT 
+                m.*,
+fs.exact_score,
+fs.prefix_score,
+fs.fulltext_score,
+fs.fuzzy_score,
+fs.phonetic_score,
+fs.popularity_boost,
+                
+                fs.exact_score + fs.prefix_score + fs.fulltext_score + fs.fuzzy_score + fs.phonetic_score + fs.popularity_boost as total_score
+            FROM fuzzy_scores fs
+            JOIN movies m ON m.id = fs.id
+            WHERE (fs.exact_score + fs.prefix_score + fs.fulltext_score + fs.fuzzy_score + fs.phonetic_score) >= :min_score
+            ';
+
+        if ($filter->hasSort()) {
+            $sortBy = $filter->getSortBy();
+            $sortOrder = $filter->getSortOrder();
+            $sql .= ' ORDER BY m.' . $this->convertCamelToSnakeCase($sortBy) . ' ' . $sortOrder . ' ';
+        } else {
+            $sql .= ' ORDER BY total_score DESC, m.imdb_rating DESC ';
+        }
+
+        $sql .= 'LIMIT :limit';
+
+        $stmt = $this->getEntityManager()->getConnection()->prepare($sql);
+        $cleanQuery = preg_replace('/[^\w\s]/', '', trim($query));
+
+        $stmt->bindValue('query', $this->prepareFuzzySearchQuery($query));
+        $stmt->bindValue('exact_query', trim($query));
+        $stmt->bindValue('like_query', trim($query));
+        $stmt->bindValue('clean_query', $cleanQuery);
+        $stmt->bindValue('min_score', $minScore);
+        $stmt->bindValue('limit', $limit, ParameterType::INTEGER);
+
+        $result = $stmt->executeQuery();
+        $movieData = $result->fetchAllAssociative();
+        
+        return $this->fetchMoviesByIds(array_column($movieData, 'id'));
+    }
+
+    private function prepareFuzzySearchQuery(string $query): string
+    {
+        $query = trim($query);
+
+        if (preg_match('/^"(.+)"$/', $query, $matches)) {
+            return '"' . $matches[1] . '"';
+        }
+
+        $words = preg_split('/\s+/', $query, -1, PREG_SPLIT_NO_EMPTY);
+
+        if (count($words) === 1) {
+            // For fuzzy search, be more flexible with single words
+            return $words[0] . '*';
+        }
+
+        // For multiple words, allow some to be optional for better fuzzy results
+        $required = array_slice($words, 0, max(1, intval(count($words) * 0.7))); // 70% required
+        $optional = array_slice($words, count($required));
+
+        $queryParts = [];
+        foreach ($required as $word) {
+            $queryParts[] = '+' . $word . '*';
+        }
+        foreach ($optional as $word) {
+            $queryParts[] = $word . '*'; // Optional words
+        }
+
+        return implode(' ', $queryParts);
+    }
+
+    private function fetchMoviesByIds(array $movieIds): array
+    {
+        if (empty($movieIds)) {
+            return [];
+        }
+
+        $movies = $this->createQueryBuilder('m')
+            ->where('m.id IN (:ids)')
+            ->setParameter('ids', $movieIds)
+            ->getQuery()
+            ->getResult();
+
+        // Preserve order from original IDs array
+        $movieMap = [];
+        foreach ($movies as $movie) {
+            $movieMap[$movie->getId()] = $movie;
+        }
+
+        $orderedMovies = [];
+        foreach ($movieIds as $id) {
+            if (isset($movieMap[$id])) {
+                $orderedMovies[] = $movieMap[$id];
+            }
+        }
+
+        return $orderedMovies;
     }
 
     private function convertCamelToSnakeCase(string $input): string
