@@ -8,7 +8,6 @@ use App\Domain\Content\Hydrator\MovieHydrator;
 use App\Domain\Content\Service\MovieService;
 use App\Domain\Content\Service\PaginationService;
 use App\Entity\Movie;
-use App\Repository\MovieRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -22,7 +21,6 @@ class MovieController extends AbstractController
         readonly private ValidatorInterface $validator,
         readonly private MovieHydrator      $movieHydrator,
         readonly private MovieService       $movieService,
-        readonly private MovieRepository    $movieRepository,
         readonly private PaginationService  $paginationService
     )
     {
@@ -72,11 +70,9 @@ class MovieController extends AbstractController
         );
     }
 
-    #[Route('/movies/{id}', name: 'movies_show', methods: ['GET'])]
-    public function show(int $id): JsonResponse
+    #[Route('/movies/{movie}', name: 'movies_show', methods: ['GET'])]
+    public function show(?Movie $movie): JsonResponse
     {
-        $movie = $this->movieRepository->findOneBy(['id' => $id]);
-
         if ($movie === null) {
             return $this->json(['message' => 'Movie not found!', 'data' => []], Response::HTTP_NOT_FOUND);
         }
@@ -99,10 +95,8 @@ class MovieController extends AbstractController
     }
 
     #[Route('/movies/{id}', name: 'movies_update', methods: ['PATCH'])]
-    public function update(int $id, Request $request): JsonResponse
+    public function update(?Movie $movie, Request $request): JsonResponse
     {
-        $movie = $this->movieRepository->findOneBy(['id' => $id]);
-
         if ($movie === null) {
             return $this->json(['message' => 'Movie not found!', 'data' => []], Response::HTTP_NOT_FOUND);
         }
@@ -114,10 +108,8 @@ class MovieController extends AbstractController
     }
 
     #[Route('/movies/{id}', name: 'movies_delete', methods: ['DELETE'])]
-    public function delete(int $id): JsonResponse
+    public function delete(?Movie $movie): JsonResponse
     {
-        $movie = $this->movieRepository->findOneBy(['id' => $id]);
-
         if ($movie === null) {
             return $this->json(['message' => 'Movie not found!', 'data' => []], Response::HTTP_NOT_FOUND);
         }
