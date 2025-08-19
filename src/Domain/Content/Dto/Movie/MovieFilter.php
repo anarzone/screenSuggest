@@ -9,9 +9,10 @@ final class MovieFilter
     public function __construct(
         public ?string $query,
         public ?string $genre,
-        public ?int    $year,
+        public ?int    $yearStart,
         public ?float  $imdbRatingMin,
         public ?float  $imdbRatingMax,
+        public ?int    $yearEnd = null,
         public ?string $sortBy = null,
         public ?string $sortOrder = null,
     )
@@ -21,13 +22,14 @@ final class MovieFilter
     public static function fromRequest(Request $request): self
     {
         return new self(
-            $request->query->get('q') ?: null,
-            $request->query->get('genre') ?: null,
-            $request->query->getInt('year') ?: null,
-            $request->query->get('ratingMin') ?: null,
-            $request->query->get('ratingMax') ?: null,
-            $request->query->get('sortBy') ?: null,
-            $request->query->get('sortOrder') ?: null
+            query: $request->query->get('q') ?: null,
+            genre: $request->query->get('genre') ?: null,
+            yearStart: $request->query->getInt('yearStart') ?: null,
+            imdbRatingMin: $request->query->getInt('imdbRatingMin') ?: null,
+            imdbRatingMax: $request->query->get('imdbRatingMax') ?: null,
+            yearEnd: $request->query->get('yearEnd') ?: null,
+            sortBy: $request->query->get('sortBy') ?: null,
+            sortOrder: $request->query->get('sortOrder') ?: null
         );
     }
 
@@ -39,7 +41,8 @@ final class MovieFilter
     public function hasFilters(): bool
     {
         return !empty($this->genre) ||
-            !empty($this->year) ||
+            !empty($this->yearStart) ||
+            !empty($this->yearEnd) ||
             !empty($this->imdbRatingMin) ||
             !empty($this->imdbRatingMax);
     }

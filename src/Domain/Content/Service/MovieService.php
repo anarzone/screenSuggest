@@ -49,7 +49,7 @@ final readonly class MovieService
         return $this->movieHydrator->hydrate(movieData: $movie);
     }
 
-    public function getSimilarMovies(Movie $movie)
+    public function getSimilarMovies(Movie $movie): array
     {
         [$movies, $total] = $this->movieRepository->getSimilarMovies($movie);
         return [$this->movieHydrator->hydrateCollection($movies), $total];
