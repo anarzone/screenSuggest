@@ -12,12 +12,12 @@ on:
       - main
 
 jobs:
-  deployDevelopmentJob:
+  deployStagingJob:
     if: github.ref == 'refs/heads/dev'
-    environment: dev
+    environment: staging
     runs-on: ubuntu-latest
     env:
-      WEBHOOK_URL: 'https://forge.laravel.com/servers/906819/sites/2702774/deploy/http?token=lEIlkPZ0hqHDym2IGlF3D6wyG6YJO63CL1FWEUGj'
+      WEBHOOK_URL: 'https://forge.laravel.com/servers/906819/sites/2821726/deploy/http?token=jmIF0xzxIYvVc9iDseCXGnvJTzN5WrFoH0PYcmDz'
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -48,10 +48,10 @@ jobs:
           # Extract the branch name from GITHUB_REF
           BRANCH_NAME=${GITHUB_REF##*/}
           echo "Deploying branch: ${BRANCH_NAME}"
-          echo "Deploying to the dev environment"
+          echo "Deploying to the staging environment"
 
           # Run the Envoy deployment command using the determined environment
-          vendor/bin/envoy run deploy --environment=dev --secret="${{ secrets.DEV_DECRYPTION_KEY }}" --token="${{ secrets.DEPLOY_TOKEN }} " --branch="${BRANCH_NAME}"
+          vendor/bin/envoy run deploy --environment=staging --secret="${{ secrets.DEV_DECRYPTION_KEY }}" --token="${{ secrets.DEPLOY_TOKEN }} " --branch="${BRANCH_NAME}"
           # echo "Deployment to the dev environment completed successfully."
           curl -s -o /dev/null $WEBHOOK_URL
 

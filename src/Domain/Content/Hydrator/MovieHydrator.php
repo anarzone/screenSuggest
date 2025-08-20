@@ -43,7 +43,7 @@ final readonly class MovieHydrator
         $populatedData = [];
 
         foreach ($movies as $movie) {
-            $populatedData[] = $this->hydrate($movie);
+            $populatedData[] = $this->hydrate(movieData: $movie);
         }
 
         return $populatedData;
@@ -127,6 +127,8 @@ final readonly class MovieHydrator
         if ($value === null) {
             return [];
         }
+
+        $values = [];
 
         if ($value instanceof Collection) {
             foreach ($value as $item) {

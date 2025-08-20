@@ -7,7 +7,9 @@ use League\Csv\Reader;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Style\SymfonyStyle;
 
 #[AsCommand(
     name: 'app:import-dataset',
@@ -16,7 +18,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 class ImportDataset extends Command
 {
     public function __construct(
-        private readonly CSVConverterService $tsvConverterService
+        private readonly CSVConverterService $csvConverterService
     )
     {
         parent::__construct();
@@ -24,7 +26,8 @@ class ImportDataset extends Command
 
     protected function configure()
     {
-        $this->setDescription('Importing movie dataset from Kaggle');
+        $this->setDescription('Importing movie dataset from Kaggle')
+            ->addOption('force', 'f', InputOption::VALUE_NONE, 'Force reload from CSV file even if staging data exists');
     }
 
     /**
@@ -32,12 +35,25 @@ class ImportDataset extends Command
      */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $output->writeln('Start importing movie dataset');
+        $io = new SymfonyStyle($input, $output);
 
-        $this->tsvConverterService->bulkImportMoviesWithRelations();
+        try {
+            if ($input->getOption('force')) {
+                $forceReload = $input->getOption('force');
+                $io->info('Force reloading from CSV...');
+                $this->csvConverterService->importMovies($forceReload);
+            } else {
+                $io->info('Processing data from staging table only...');
+                // You would need to add a method to process staging only
+                $this->csvConverterService->importMovies();
+            }
 
-        $output->writeln("<info>Imported movies successfully.</info>");
+            $io->success('Import completed successfully!');
+            return Command::SUCCESS;
+        } catch (\Exception $e) {
+            $io->error('Import failed: ' . $e->getMessage());
+            return Command::FAILURE;
+        }
 
-        return Command::SUCCESS;
     }
 }

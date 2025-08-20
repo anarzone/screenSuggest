@@ -1,26 +1,26 @@
 @if($environment === '')
     // $environment is injected by the Envoy CLI via the --environment flag.
-    // If you omit the flag, it defaults to 'dev'.
-    $environment = 'dev';
+    // If you omit the flag, it defaults to 'staging'.
+    $environment = 'staging';
 @endif
 
 @setup
     $siteName = getenv('SITE_NAME') ?: 'screensuggest';
 
     switch($environment) {
-        case 'dev':
-            // Development environment settings
+        case 'staging':
+            // Staging environment settings
             $servers   = ['web' => 'forge@116.202.22.113'];
             $branch    = 'dev';
-            $appEnv    = 'dev';
-            $hostnameRoot = 'dev.anarzone.com';
+            $appEnv    = 'staging';
+            $hostnameRoot = 'staging.api.anarzone.com';
             break;
         case 'prod':
             // Production environment settings
             $servers   = ['web' => 'forge@116.202.22.113'];
             $branch    = 'main';
             $appEnv    = 'prod';
-            $hostnameRoot = 'prod.anarzone.com';
+            $hostnameRoot = 'api.anarzone.com';
             break;
         default:
             throw new Exception("Unknown environment: {$environment}");

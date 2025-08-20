@@ -2,12 +2,12 @@
 
 namespace App\Domain\Content\Controller;
 
-use App\Domain\Content\Dto\ContentDtoInterface;
 use App\Domain\Content\Dto\Movie\MovieDto;
+use App\Domain\Content\Dto\Movie\MovieFilter;
 use App\Domain\Content\Hydrator\MovieHydrator;
-use App\Domain\Content\Service\CSVConverterService;
 use App\Domain\Content\Service\MovieService;
-use App\Repository\MovieRepository;
+use App\Domain\Content\Service\PaginationService;
+use App\Entity\Movie;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -19,41 +19,67 @@ class MovieController extends AbstractController
 {
     public function __construct(
         readonly private ValidatorInterface $validator,
-        readonly private MovieHydrator $movieHydrator,
-        readonly private MovieService $movieService,
-        readonly private MovieRepository $movieRepository,
-        readonly private CSVConverterService $csvConverterService
+        readonly private MovieHydrator      $movieHydrator,
+        readonly private MovieService       $movieService,
+        readonly private PaginationService  $paginationService
     )
     {
     }
 
     #[Route(
         '/movies',
-        name: 'movies_all',
+        name: 'movies',
         methods: ['GET']
     )]
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $pagination = $this->paginationService->getPaginationParameters($request);
+        $filter = MovieFilter::fromRequest($request);
+
+        [$movies, $total] = $this->movieService->getPaginatedFiltered(
+            $filter,
+            $pagination['limit'],
+            $pagination['offset']
+        );
+
+        return $this->json([
+            'message' => 'Movies retrieved successfully',
+            'data' => $movies,
+            'pagination' => $this->paginationService->createPaginationData(
+                $pagination['page'],
+                $pagination['limit'],
+                $total
+            ),
+        ]);
+    }
+
+    #[Route('/movies/similar/{id}', name: 'movies_similar', methods: ['GET'])]
+    public function getSimilarMovies(?Movie $movie): JsonResponse
+    {
+        if ($movie === null) {
+            return $this->json(['message' => 'Movie not found!', 'data' => []], Response::HTTP_NOT_FOUND);
+        }
+
+        $similarMovies = $this->movieService->getSimilarMovies($movie);
+
         return $this->json(
             [
-                'message' => 'All movies',
-                'data' => $this->movieService->all(),
+                'message' => 'Similar movies retrieved successfully',
+                'data' => $similarMovies
             ]
         );
     }
 
-    #[Route('/movies/{id}', name: 'movies_show', methods: ['GET'])]
-    public function show(int $id): JsonResponse
+    #[Route('/movies/{movie}', name: 'movies_show', methods: ['GET'])]
+    public function show(?Movie $movie): JsonResponse
     {
-        $movie = $this->movieRepository->findOneBy(['id' => $id]);
-
         if ($movie === null) {
             return $this->json(['message' => 'Movie not found!', 'data' => []], Response::HTTP_NOT_FOUND);
         }
 
         return $this->json(
             [
-                'message' => 'Movie found!',
+                'message' => 'Movie retrieved successfully',
                 'data' => $this->movieService->single($movie)
             ]
         );
@@ -69,10 +95,8 @@ class MovieController extends AbstractController
     }
 
     #[Route('/movies/{id}', name: 'movies_update', methods: ['PATCH'])]
-    public function update(int $id, Request $request): JsonResponse
+    public function update(?Movie $movie, Request $request): JsonResponse
     {
-        $movie = $this->movieRepository->findOneBy(['id' => $id]);
-
         if ($movie === null) {
             return $this->json(['message' => 'Movie not found!', 'data' => []], Response::HTTP_NOT_FOUND);
         }
@@ -84,10 +108,8 @@ class MovieController extends AbstractController
     }
 
     #[Route('/movies/{id}', name: 'movies_delete', methods: ['DELETE'])]
-    public function delete(int $id): JsonResponse
+    public function delete(?Movie $movie): JsonResponse
     {
-        $movie = $this->movieRepository->findOneBy(['id' => $id]);
-
         if ($movie === null) {
             return $this->json(['message' => 'Movie not found!', 'data' => []], Response::HTTP_NOT_FOUND);
         }
@@ -111,11 +133,5 @@ class MovieController extends AbstractController
             'message' => $message,
             'data' => $movieDto,
         ], Response::HTTP_CREATED);
-    }
-
-    #[Route('/csv', name: 'movies_csv', methods: ['GET'])]
-    public function testUrl(): void
-    {
-        $this->csvConverterService->convert();
     }
 }
