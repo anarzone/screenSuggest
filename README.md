@@ -1,6 +1,11 @@
 # 🎬 ScreenSuggest
 
-[![Laravel Forge Site Deployment Status](https://img.shields.io/endpoint?url=https%3A%2F%2Fforge.laravel.com%2Fsite-badges%2Ffd8ef835-15ef-4599-9c5d-80f21539e897%3Fdate%3D1%26commit%3D1&style=flat-square)](https://forge.laravel.com/servers/906819/sites/2821726)
+## 🚀 Deployment Status
+
+| Environment | Branch | Status | Server      |
+|-------------|--------|--------|-------------|
+| **Development** | `dev` |[![Laravel Forge Site Deployment Status](https://img.shields.io/endpoint?url=https%3A%2F%2Fforge.laravel.com%2Fsite-badges%2Ffd8ef835-15ef-4599-9c5d-80f21539e897%3Fdate%3D1%26label%3D1%26commit%3D1&style=for-the-badge)](https://forge.laravel.com/servers/906819/sites/2821726) | `Staging`   |
+| **Production** | `main` | [![Laravel Forge Site Deployment Status](https://img.shields.io/endpoint?url=https%3A%2F%2Fforge.laravel.com%2Fsite-badges%2F256a3972-80ed-4e5e-b603-9f57b887fc61%3Fdate%3D1%26label%3D1%26commit%3D1&style=for-the-badge)](https://forge.laravel.com/servers/906819/sites/2821961) | `Production` |
 
 A powerful movie and TV show discovery platform built with Symfony 7.3 and Domain-Driven Design (DDD) architecture. ScreenSuggest provides intelligent search, personalized recommendations, and comprehensive content management through a modern REST API.
 
